@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init -y)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx vite build:*)",
+      "Bash(npm run build:*)",
+      "WebSearch",
+      "Bash(dir \"C:\\\\Users\\\\leffi\\\\Documents\\\\Projects\\\\2026_01_GeminiVsCursor\" /B)",
+      "Bash(dir:*)",
+      "Bash(curl:*)",
+      "Bash(node -e:*)"
+    ]
+  }
+}
