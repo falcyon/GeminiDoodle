@@ -1,3 +1,6 @@
+// Debug mode — toggle hitboxes, mass labels, suction lines
+export const DEBUG = false;
+
 // Pixels per meter — controls how large the physics world appears on screen
 export const SCALE = 6;
 
@@ -14,6 +17,8 @@ export const CAT_WALL        = 0x0002;
 export const CAT_STICKMAN    = 0x0004;
 export const CAT_CURSOR      = 0x0008;
 export const CAT_GEMINI      = 0x0010;
+export const CAT_DINO        = 0x0020;
+export const CAT_CRASH       = 0x0040;
 export const CAT_DEFAULT     = CAT_ENVIRONMENT; // Alias for backward compat if needed
 
 // Object colors
@@ -38,4 +43,11 @@ export const COLORS = {
   searchBar: '#ffffff',
   searchBarBorder: '#dfe1e5',
   searchBarText: '#9aa0a6',
+
+  // The Crash
+  crashVoid: '#0a0a0a',
+  crashEdge: '#ff0040',
+  crashGlitch: '#00ff41',
+  crashEye: '#ff2020',
+  crashEyePupil: '#ffffff',
 };

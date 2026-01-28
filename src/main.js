@@ -11,6 +11,13 @@ import { createLoadingOverlay } from './loading.js';
 import { createCache } from './cache.js';
 import { createGeminiIcon } from './geminiIcon.js';
 import { createCursorBody } from './cursorBody.js';
+import { createHealthBar } from './healthBar.js';
+import { createIntro } from './intro.js';
+import { createGameState } from './combat/gameState.js';
+import { createCrash } from './combat/theCrash.js';
+import { createCrashRenderer } from './combat/crashRenderer.js';
+import { createCombatHUD } from './combat/combatHUD.js';
+import { CRASH_SPAWN_DELAY } from './combat/combatConstants.js';
 
 // --- Canvas setup ---
 const canvas = document.getElementById('c');
@@ -44,6 +51,7 @@ const cache = createCache();
 let isGenerating = false;
 
 async function handleSearch(text, searchBarBody) {
+  if (!intro.isComplete()) return;
   if (isGenerating) return;
   isGenerating = true;
   searchBar.setLoading(true);
@@ -58,8 +66,8 @@ async function handleSearch(text, searchBarBody) {
     // Check cache (localStorage L1, then Firebase L2)
     const cached = await cache.get(key);
     if (cached) {
-      const spawnX = W * 0.65 + Math.random() * (W * 0.25);
-      const spawnY = H * 0.15;
+      const spawnX = W * 0.75 + Math.random() * (W * 0.2);
+      const spawnY = H * 0.25;
       executor.execute(cached, spawnX, spawnY);
       overlay.showSuccess(`Created "${text}"! (cached)`);
       return;
@@ -68,8 +76,8 @@ async function handleSearch(text, searchBarBody) {
     const { code } = await generateObject(text);
 
     // Spawn at the top-right area of the world
-    const spawnX = W * 0.65 + Math.random() * (W * 0.25);
-    const spawnY = 5;
+    const spawnX = W * 0.75 + Math.random() * (W * 0.2);
+    const spawnY = H * 0.15;
 
     executor.execute(code, spawnX, spawnY);
     cache.set(key, code);
@@ -98,25 +106,71 @@ const inputState = setupInput(canvas, world);
 // --- Renderer ---
 const renderer = createRenderer(canvas, getObjects, { jointDots: [] }, inputState);
 
+// --- Intro & Health Bar ---
+const healthBar = createHealthBar(canvas);
+const intro = createIntro(world, canvas, healthBar);
+
+// --- Combat system ---
+const gameState = createGameState(healthBar);
+const crash = createCrash(world, gameState, healthBar, W, H);
+const crashRenderer = createCrashRenderer(canvas, crash, gameState, world);
+const combatHUD = createCombatHUD(canvas, gameState);
+let combatSpawnScheduled = false;
+let crashDestroyed = false;
+
 // --- Game loop ---
 function loop() {
+  const state = gameState.getState();
+
+  // Intro state machine (loading bar, dino, etc.)
+  intro.update();
+
+  // Spawn The Crash after intro completes
+  if (intro.isComplete() && !combatSpawnScheduled && state === 'idle') {
+    combatSpawnScheduled = true;
+    setTimeout(() => gameState.start(), CRASH_SPAWN_DELAY);
+  }
+
   // Run all updaters from generated objects (with auto-removal on error)
-  const updaters = executor.getUpdaters();
-  for (let i = updaters.length - 1; i >= 0; i--) {
-    try {
-      updaters[i].update();
-    } catch (e) {
-      console.warn('Updater error, removing:', e);
-      updaters.splice(i, 1);
+  if (state !== 'defeat') {
+    const updaters = executor.getUpdaters();
+    for (let i = updaters.length - 1; i >= 0; i--) {
+      try {
+        updaters[i].update();
+        if (updaters[i].dead) updaters.splice(i, 1);
+      } catch (e) {
+        console.warn('Updater error, removing:', e);
+        updaters.splice(i, 1);
+      }
     }
   }
 
   cursorBody.update();
   geminiIcon.update();
-  world.step(1 / 60, 8, 3);
+
+  // Update combat
+  if (gameState.isActive()) {
+    gameState.update(1 / 60);
+    crash.update(1 / 60);
+  }
+
+  // Victory cleanup (once)
+  if (state === 'victory' && !crashDestroyed) {
+    crashDestroyed = true;
+    crash.destroy();
+  }
+
+  // Physics step (skip on defeat to freeze everything)
+  if (state !== 'defeat') {
+    world.step(1 / 60, 8, 3);
+  }
+
   cleanupOOB();
   renderer.draw();
+  crashRenderer.draw();
+  healthBar.draw();
   overlay.draw();
+  combatHUD.draw();
   requestAnimationFrame(loop);
 }
 

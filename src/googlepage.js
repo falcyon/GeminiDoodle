@@ -7,11 +7,12 @@ import { registerObject } from './objects.js';
  * On first drag, input.js flips it to dynamic so gravity takes over.
  */
 function createStaticBody(world, x, y, hw, hh, mass) {
+  mass *= 0.2; // lightweight page elements
   const body = world.createBody({
     type: 'static',
     position: new planck.Vec2(x, y),
   });
-  body.setUserData({ draggable: true });
+  body.setUserData({ draggable: true, isPageElement: true });
   body.createFixture(new planck.Box(hw, hh), {
     density: mass / (4 * hw * hh),
     friction: 0.4,
@@ -25,11 +26,12 @@ function createStaticBody(world, x, y, hw, hh, mass) {
  * Creates a static, draggable circle body.
  */
 function createStaticCircleBody(world, x, y, radius, mass) {
+  mass *= 0.2; // lightweight page elements
   const body = world.createBody({
     type: 'static',
     position: new planck.Vec2(x, y),
   });
-  body.setUserData({ draggable: true });
+  body.setUserData({ draggable: true, isPageElement: true });
   body.createFixture(new planck.Circle(radius), {
     density: mass / (Math.PI * radius * radius),
     friction: 0.4,
@@ -55,12 +57,12 @@ export function createGooglePage(world) {
 
   // ── Google Logo (each letter is its own physics body) ────────────────
   const logoLetters = [
-    { char: 'G', color: '#4285F4', hw: 4.0, shape: 'circle', radius: 4.4, textOffsetY: 3, textOffsetX: -2, yOffset: -6 },
-    { char: 'o', color: '#EA4335', hw: 3.3, shape: 'circle', radius: 3.1, textOffsetY: -3 },
-    { char: 'o', color: '#FBBC05', hw: 3.3, shape: 'circle', radius: 3.1, textOffsetY: -3 },
+    { char: 'G', color: '#4285F4', hw: 4.0, shape: 'circle', radius: 4.4, textOffsetY: 3, textOffsetX: -2, yOffset: -6, mass: 15 },
+    { char: 'o', color: '#EA4335', hw: 3.3, shape: 'circle', radius: 3.1, textOffsetY: -3, mass: 15 },
+    { char: 'o', color: '#FBBC05', hw: 3.3, shape: 'circle', radius: 3.1, textOffsetY: -3, mass: 15 },
     { char: 'g', color: '#4285F4', hw: 3, hh: 4.4, textOffsetY: -10, yOffset: 9 },
     { char: 'l', color: '#34A853', hw: 1, hh: 4, textOffsetY: 3, yOffset: -5 },
-    { char: 'e', color: '#EA4335', hw: 3.0, shape: 'circle', radius: 3.1, textOffsetY: -3 },
+    { char: 'e', color: '#EA4335', hw: 3.0, shape: 'circle', radius: 3.1, textOffsetY: -3, mass: 15 },
   ];
   const logoHH = 5;
   const logoFontSize = 8 * 2 * SCALE * 0.7; // original visual size (hh=8)
@@ -77,9 +79,10 @@ export function createGooglePage(world) {
     const isCircle = letter.shape === 'circle';
     const letterHH = letter.hh || logoHH;
     const ly = logoY + (letter.yOffset || 0) / SCALE;
+    const letterMass = letter.mass || 5;
     const body = isCircle
-      ? createStaticCircleBody(world, cx, ly, letter.radius, 5)
-      : createStaticBody(world, cx, ly, letter.hw, letterHH, 5);
+      ? createStaticCircleBody(world, cx, ly, letter.radius, letterMass)
+      : createStaticBody(world, cx, ly, letter.hw, letterHH, letterMass);
     const obj = {
       body,
       type: 'logoletter',
@@ -180,32 +183,51 @@ export function createGooglePage(world) {
   });
 
   // ── Footer ────────────────────────────────────────────────────────────
-  // Top separator line
+  // Grey background band — non-draggable, immovable, one-way from inside
+  const footerBody = world.createBody({
+    type: 'static',
+    position: new planck.Vec2(W / 2, H - 3.75),
+  });
+  footerBody.setUserData({ isFooterBar: true });
+  footerBody.createFixture(new planck.Box(W / 2, 3.75), {
+    density: 0,
+    friction: 0.4,
+    restitution: 0.15,
+    filterCategoryBits: CAT_ENVIRONMENT,
+  });
   registerObject({
-    body: createStaticBody(world, W / 2, H - 15, W / 2, 0.15, 15),
+    body: footerBody,
     type: 'footerbar',
     hw: W / 2,
-    hh: 0.15,
-    bgColor: '#dadce0',
+    hh: 3.75,
+    bgColor: '#f2f2f2',
   });
 
-  // Country name
+  // One-way collision: objects inside the footer can exit upward but not re-enter
+  const footerTopY = H - 7.5;
+  world.on('pre-solve', (contact) => {
+    const bodyA = contact.getFixtureA().getBody();
+    const bodyB = contact.getFixtureB().getBody();
+
+    let otherBody = null;
+    if (bodyA.getUserData()?.isFooterBar) otherBody = bodyB;
+    else if (bodyB.getUserData()?.isFooterBar) otherBody = bodyA;
+    if (!otherBody) return;
+
+    // If the other body's center is inside the footer, let it pass through
+    if (otherBody.getPosition().y > footerTopY) {
+      contact.setEnabled(false);
+    }
+  });
+
+  // Country name (same row as footer links)
   registerObject({
-    body: createStaticBody(world, W / 2, H - 11.5, 7, 1.2, 5),
+    body: createStaticBody(world, W / 2, H - 5, 7, 1.2, 5),
     type: 'textlink',
     hw: 7,
     hh: 1.2,
     label: 'United States',
     textColor: '#70757a',
-  });
-
-  // Bottom separator line
-  registerObject({
-    body: createStaticBody(world, W / 2, H - 8.5, W / 2, 0.15, 15),
-    type: 'footerbar',
-    hw: W / 2,
-    hh: 0.15,
-    bgColor: '#dadce0',
   });
 
   // Footer left links

@@ -5,7 +5,7 @@ import { registerObject } from './objects.js';
 // Dimensions in meters (half-sizes)
 const HW = 40;
 const HH = 3;
-const MASS = 30;
+const MASS = 6;
 
 /**
  * Creates a Google-style search bar.

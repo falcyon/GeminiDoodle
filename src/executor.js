@@ -13,17 +13,31 @@ export function createExecutor(world) {
 
   function execute(code, spawnX, spawnY) {
     let inUpdate = false;
+    const rootBodies = []; // non-ephemeral bodies created by this execute() call
 
     function wrappedRegister(obj) {
       obj.spawned = true;
       registerObject(obj);
       if (inUpdate) {
+        obj.ephemeral = true;
+        // Tag the body so suction can skip particles
+        const ud = obj.body.getUserData() || {};
+        ud.isEphemeral = true;
+        obj.body.setUserData(ud);
+        // Weightless particles: no gravity, zero density
+        obj.body.setGravityScale(0);
+        for (let f = obj.body.getFixtureList(); f; f = f.getNext()) {
+          f.setDensity(0);
+        }
+        obj.body.resetMassData();
         ephemeral.push(obj);
         if (ephemeral.length > MAX_EPHEMERAL) {
           const old = ephemeral.shift();
           unregisterObject(old);
           world.destroyBody(old.body);
         }
+      } else {
+        rootBodies.push(obj.body);
       }
     }
 
@@ -47,7 +61,14 @@ export function createExecutor(world) {
     if (result && typeof result.update === 'function') {
       const origUpdate = result.update;
       updaters.push({
+        dead: false,
+        rootBodies,
         update() {
+          // Stop if all root bodies have been destroyed
+          if (rootBodies.length > 0 && rootBodies.every(b => !b.isActive())) {
+            this.dead = true;
+            return;
+          }
           inUpdate = true;
           origUpdate();
           inUpdate = false;

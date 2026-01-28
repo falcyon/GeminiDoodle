@@ -10,7 +10,7 @@ const ICON_R = 3; // half-size in meters
  */
 export function createGeminiIcon(world, canvas) {
   const initX = (canvas.width / SCALE) - 15;
-  const initY = 10;
+  const initY = (canvas.height / SCALE) - 15;
   const body = world.createBody({
     type: 'dynamic',
     position: new planck.Vec2(initX, initY),
@@ -18,6 +18,7 @@ export function createGeminiIcon(world, canvas) {
   });
 
   body.setGravityScale(0);
+  body.setUserData({ isGeminiIcon: true });
 
   // Diamond hitbox: a box rotated 45°
   const DIAMOND_HALF = ICON_R * 0.7; // half-size of the square before rotation

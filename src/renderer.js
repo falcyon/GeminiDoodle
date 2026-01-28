@@ -1,4 +1,4 @@
-import { SCALE, COLORS } from './constants.js';
+import { SCALE, COLORS, DEBUG } from './constants.js';
 
 /**
  * Creates the renderer that draws the physics scene onto a canvas each frame.
@@ -18,11 +18,6 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
     // Background
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, width, height);
-
-    // Footer gray background band (non-physics visual)
-    const footerTopPx = height - 15 * SCALE;
-    ctx.fillStyle = '#f2f2f2';
-    ctx.fillRect(0, footerTopPx, width, height - footerTopPx);
 
     // Wall border
     ctx.strokeStyle = COLORS.wall;
@@ -70,11 +65,16 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
         drawFooterBar(ctx, obj);
       } else if (obj.type === 'gemini-icon') {
         drawGeminiIcon(ctx, obj);
+      } else if (obj.type === 'dino') {
+        drawDino(ctx, obj);
       } else {
         drawRect(ctx, obj);
       }
 
-      // drawDebugHitbox(ctx, obj);
+      if (DEBUG) {
+        drawDebugHitbox(ctx, obj);
+        drawMassLabel(ctx, obj);
+      }
 
       ctx.restore();
     }
@@ -386,6 +386,95 @@ function drawGeminiIcon(ctx, obj) {
   ctx.fill();
 }
 
+function drawDino(ctx, obj) {
+  if (!obj.spriteReady || !obj.sprite) return;
+
+  const frame = obj.currentFrame;
+  // Source crop from the 2x sprite sheet (88×94 per frame)
+  const sx = frame * 88;
+  const sw = 88;
+  const sh = 94;
+  // Display at 1x size derived from physics half-extents
+  const dw = obj.hw * 2 * SCALE;
+  const dh = obj.hh * 2 * SCALE;
+
+  // Dino sprite naturally faces right (direction of travel from left)
+  ctx.drawImage(obj.sprite, sx, 0, sw, sh, -dw / 2, -dh / 2, dw, dh);
+
+  // Speech bubble (counter-rotate so it stays upright)
+  if (obj.showSpeech && obj.speechText) {
+    ctx.save();
+    ctx.rotate(-obj.body.getAngle());
+    drawSpeechBubble(ctx, obj.speechText, dh);
+    ctx.restore();
+  }
+}
+
+function drawSpeechBubble(ctx, text, spriteHeight) {
+  const maxWidth = 220;
+  const padding = 10;
+  const fontSize = 12;
+  const lineHeight = 16;
+  const tailH = 10;
+
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+  // Word wrap
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    if (ctx.measureText(testLine).width > maxWidth - padding * 2) {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  const bubbleW = maxWidth;
+  const bubbleH = lines.length * lineHeight + padding * 2;
+  const bubbleX = -bubbleW / 2;
+  const bubbleY = -spriteHeight / 2 - bubbleH - tailH - 5;
+
+  // Bubble background
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Tail (triangle pointing down toward dino)
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-8, bubbleY + bubbleH);
+  ctx.lineTo(8, bubbleY + bubbleH);
+  ctx.lineTo(0, bubbleY + bubbleH + tailH);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Cover the tail join line with white
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-7, bubbleY + bubbleH - 2, 14, 4);
+
+  // Text
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], bubbleX + padding, bubbleY + padding + i * lineHeight);
+  }
+  ctx.textAlign = 'left';
+}
+
 function drawCursorArrow(ctx) {
   // Standard arrow cursor shape (pixel-sized, drawn at body origin)
   // The body origin is the arrow tip (top-left corner of the cursor)
@@ -407,28 +496,105 @@ function drawCursorArrow(ctx) {
   ctx.stroke();
 }
 
+function drawMassLabel(ctx, obj) {
+  const body = obj.body;
+  if (!body) return;
+  const mass = body.getMass();
+  // Static bodies have mass 0 — show the fixture density * area instead
+  let label;
+  if (mass > 0) {
+    label = mass.toFixed(1) + 'kg';
+  } else {
+    // Compute from fixture density for static bodies
+    const f = body.getFixtureList();
+    if (!f) return;
+    const d = f.getDensity();
+    const shape = f.getShape();
+    let area = 0;
+    if (shape.getType() === 'circle') {
+      const r = shape.getRadius();
+      area = Math.PI * r * r;
+    } else if (shape.getType() === 'polygon') {
+      // Approximate with bounding box from half-widths
+      if (obj.hw != null && obj.hh != null) {
+        area = 4 * obj.hw * obj.hh;
+      }
+    }
+    const effectiveMass = d * area;
+    label = effectiveMass.toFixed(1) + 'kg*';
+  }
+
+  // Offset below the object center
+  const offsetY = obj.radius ? obj.radius * SCALE + 10 : (obj.hh ? obj.hh * SCALE + 10 : 15);
+
+  ctx.save();
+  ctx.rotate(-obj.body.getAngle()); // unrotate so text is always upright
+  ctx.font = 'bold 10px monospace';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, 0, offsetY);
+  ctx.restore();
+}
+
 function drawDebugHitbox(ctx, obj) {
   ctx.globalAlpha = 0.25;
   ctx.strokeStyle = '#ff0000';
   ctx.lineWidth = 1.5;
-  if (obj.hitShape === 'diamond') {
-    const s = obj.diamondHalf * SCALE;
-    ctx.beginPath();
-    ctx.moveTo(0, -s);
-    ctx.lineTo(s, 0);
-    ctx.lineTo(0, s);
-    ctx.lineTo(-s, 0);
-    ctx.closePath();
-    ctx.stroke();
-  } else if (obj.hitShape === 'circle' || obj.type === 'circle') {
-    const r = obj.radius * SCALE;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (obj.hw != null && obj.hh != null) {
-    const w = obj.hw * 2 * SCALE;
-    const h = obj.hh * 2 * SCALE;
-    ctx.strokeRect(-w / 2, -h / 2, w, h);
+
+  // Read actual fixture shape from the Box2D body for accurate hitbox visualization
+  let drawn = false;
+  try {
+    const fixture = obj.body && obj.body.getFixtureList();
+    if (fixture) {
+      const shape = fixture.getShape();
+      const type = shape.getType();
+      if (type === 'circle') {
+        const r = shape.getRadius() * SCALE;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        drawn = true;
+      } else if (type === 'polygon') {
+        const verts = shape.m_vertices;
+        const count = shape.m_count;
+        if (verts && count > 0) {
+          ctx.beginPath();
+          for (let i = 0; i < count; i++) {
+            const v = verts[i];
+            const px = v.x * SCALE;
+            const py = v.y * SCALE;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.stroke();
+          drawn = true;
+        }
+      }
+    }
+  } catch (_) { /* fall through to legacy drawing */ }
+
+  if (!drawn) {
+    if (obj.hitShape === 'diamond') {
+      const s = obj.diamondHalf * SCALE;
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.lineTo(s, 0);
+      ctx.lineTo(0, s);
+      ctx.lineTo(-s, 0);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (obj.hitShape === 'circle' || obj.type === 'circle') {
+      const r = obj.radius * SCALE;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (obj.hw != null && obj.hh != null) {
+      const w = obj.hw * 2 * SCALE;
+      const h = obj.hh * 2 * SCALE;
+      ctx.strokeRect(-w / 2, -h / 2, w, h);
+    }
   }
   ctx.globalAlpha = 1.0;
 }

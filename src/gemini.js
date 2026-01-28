@@ -32,6 +32,23 @@ User: "asdfghjk"
 throw new Error("Cannot understand request");
 `;
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // ms
+
+async function fetchWithRetry(url, options) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const response = await fetch(url, options);
+    if (response.ok) return response;
+    if (response.status === 503 || response.status === 429) {
+      console.warn(`API overloaded (${response.status}), retry ${attempt + 1}/${MAX_RETRIES}...`);
+      await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+      continue;
+    }
+    return response; // non-retryable error
+  }
+  return fetch(url, options); // final attempt
+}
+
 const conversationHistory = [];
 
 function stripCodeFences(text) {
@@ -56,7 +73,7 @@ function stripCodeFences(text) {
  * lowercase cache key (e.g. "give me something that creates rain" → "rain").
  */
 export async function normalizePrompt(userPrompt) {
-  const response = await fetch(FLASH_URL, {
+  const response = await fetchWithRetry(FLASH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -96,7 +113,7 @@ export async function generateObject(userPrompt) {
     parts: [{ text: `Create: "${userPrompt}"` }],
   });
 
-  const response = await fetch(API_URL, {
+  const response = await fetchWithRetry(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

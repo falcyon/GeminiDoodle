@@ -10,7 +10,8 @@
       "Bash(dir \"C:\\\\Users\\\\leffi\\\\Documents\\\\Projects\\\\2026_01_GeminiVsCursor\" /B)",
       "Bash(dir:*)",
       "Bash(curl:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(node:*)"
     ]
   }
 }

@@ -64,18 +64,18 @@ export function createScene(world) {
   const hw = RECT_HALF_WIDTH;
   const hh = RECT_HALF_HEIGHT;
 
-  // Two balls (mass 2 and 3)
-  createBall(world, W * 0.2, H * 0.2, 0.8, 2, COLORS.ball1);
-  createBall(world, W * 0.45, H * 0.15, 1.0, 3, COLORS.ball2);
+  // Two balls (mass 0.4 and 0.6)
+  createBall(world, W * 0.2, H * 0.2, 0.8, 0.4, COLORS.ball1);
+  createBall(world, W * 0.45, H * 0.15, 1.0, 0.6, COLORS.ball2);
 
-  // Standalone rectangle (mass 10)
-  createRect(world, W * 0.6, H * 0.15, hw, hh, 10, COLORS.rectStandalone);
+  // Standalone rectangle (mass 2)
+  createRect(world, W * 0.6, H * 0.15, hw, hh, 2, COLORS.rectStandalone);
 
-  // Two connected rectangles (mass 10 each) joined at short edges
+  // Two connected rectangles (mass 2 each) joined at short edges
   const jointX = W * 0.78;
   const jointY = H * 0.4;
-  const rectA = createRect(world, jointX, jointY + hh, hw, hh, 10, COLORS.rectJointA);
-  const rectB = createRect(world, jointX, jointY - hh, hw, hh, 10, COLORS.rectJointB);
+  const rectA = createRect(world, jointX, jointY + hh, hw, hh, 2, COLORS.rectJointA);
+  const rectB = createRect(world, jointX, jointY - hh, hw, hh, 2, COLORS.rectJointB);
 
   const revoluteJoint = world.createJoint(
     new planck.RevoluteJoint({}, rectA, rectB, new planck.Vec2(jointX, jointY))
