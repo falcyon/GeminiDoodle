@@ -1,9 +1,9 @@
 // --- The Crash: tuning constants ---
 
 // Entity visual
-export const CRASH_INITIAL_RADIUS = 12;      // meters — visual radius when fully entered
+export const CRASH_INITIAL_RADIUS = 8;        // meters — visual radius when fully entered
 export const CRASH_MAX_RADIUS = 80;           // meters — game over (fills screen)
-export const CRASH_GROW_RATE = 0.08;          // meters/sec base growth
+export const CRASH_GROW_RATE = 0.15;          // meters/sec base growth
 export const CRASH_SPAWN_DELAY = 4000;        // ms after intro completes before Crash enters
 export const CRASH_ENTRY_SPEED = 3;           // m/s horizontal entry from the left
 
@@ -18,7 +18,7 @@ export const EYE_MOMENTUM_SCALE = 0.005;       // damage = momentum * this
 export const EYE_ROAM_SPEED = 0.3;            // radians/sec — how fast the eye drifts along the edge
 
 // Suction (inverse-square: force = strength / dist^2)
-export const SUCTION_STRENGTH = 300;        // base gravitational pull (N·m²)
+export const SUCTION_STRENGTH = 150;        // base gravitational pull (N·m²)
 export const SUCTION_GROWTH = 200;           // additional pull per meter of radius growth
 
 // Auto-detach

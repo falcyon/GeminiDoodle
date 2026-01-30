@@ -122,6 +122,9 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
     for (let i = 0; i < objects.length; i++) {
       const obj = objects[i];
 
+      // Skip hidden objects (e.g., Google UI on victory)
+      if (obj.hidden) continue;
+
       // Skip objects with invalid or destroyed bodies
       if (!obj.body || typeof obj.body.getAngle !== 'function') {
         continue;
@@ -152,6 +155,10 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
         drawGeminiIcon(ctx, obj);
       } else if (obj.type === 'dino') {
         drawDino(ctx, obj);
+      } else if (obj.type === 'victory-text') {
+        drawVictoryText(ctx, obj);
+      } else if (obj.type === 'victory-button') {
+        drawVictoryButton(ctx, obj);
       } else {
         drawRect(ctx, obj);
       }
@@ -344,6 +351,10 @@ function drawSearchBar(ctx, obj) {
         ctx.fillStyle = '#5f6368';
         ctx.fillRect(textX + textW + 2, -fontSize * 0.45, 1.5, fontSize * 0.9);
       }
+    } else if (obj.victoryPlaceholder) {
+      // Victory mode: show playground message
+      ctx.fillStyle = '#0F9D58'; // Google green
+      ctx.fillText(obj.victoryPlaceholder, textX, 0);
     } else {
       ctx.fillStyle = COLORS.searchBarText;
       ctx.fillText('Search Google or type a URL', textX, 0);
@@ -413,6 +424,43 @@ function drawTextLink(ctx, obj) {
   const fontSize = Math.max(12, h * 0.5);
   ctx.font = `${fontSize}px Arial, sans-serif`;
   ctx.fillStyle = obj.textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(obj.label, 0, 0);
+  ctx.textAlign = 'left';
+}
+
+function drawVictoryText(ctx, obj) {
+  const h = obj.hh * 2 * SCALE;
+  const fontSize = Math.max(36, h * 0.8);
+
+  ctx.font = `bold ${fontSize}px "Product Sans", Arial, sans-serif`;
+  ctx.fillStyle = '#00ff41';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(obj.label, 0, 0);
+  ctx.textAlign = 'left';
+}
+
+function drawVictoryButton(ctx, obj) {
+  const w = obj.hw * 2 * SCALE;
+  const h = obj.hh * 2 * SCALE;
+  const r = h / 2;
+
+  // Background with glow
+  ctx.save();
+  ctx.shadowColor = '#4285f4';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2, -h / 2, w, h, r);
+  ctx.fillStyle = '#4285f4';
+  ctx.fill();
+  ctx.restore();
+
+  // Label
+  const fontSize = Math.max(14, h * 0.45);
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+  ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(obj.label, 0, 0);

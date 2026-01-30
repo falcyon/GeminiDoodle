@@ -24,6 +24,10 @@ const PLACEHOLDER_SUGGESTIONS = [
  * Pressing Enter resets to the default placeholder text.
  */
 export function createSearchBar(world, x, y, onSubmit) {
+  // Store original position for victory restoration
+  const originalX = x;
+  const originalY = y;
+
   const body = world.createBody({
     type: 'static',
     position: new planck.Vec2(x, y),
@@ -142,10 +146,31 @@ export function createSearchBar(world, x, y, onSubmit) {
     }
   });
 
+  // Victory restoration: move back to center, reset to static, show playground message
+  function restoreForVictory() {
+    // Reset position
+    body.setTransform(new planck.Vec2(originalX, originalY), 0);
+    body.setLinearVelocity(new planck.Vec2(0, 0));
+    body.setAngularVelocity(0);
+
+    // Reset to static so it doesn't fall
+    body.setType('static');
+
+    // Clear any text and show victory placeholder
+    obj.text = '';
+    obj.loading = false;
+    obj.victoryPlaceholder = 'Create more things if you like. This is a playground.';
+
+    // Stop animated placeholder
+    stopAnimatedPlaceholder();
+  }
+
   return {
     body,
+    obj,
     setLoading(v) { obj.loading = v; },
     startAnimatedPlaceholder,
     stopAnimatedPlaceholder,
+    restoreForVictory,
   };
 }

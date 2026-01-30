@@ -5,6 +5,20 @@
 - [x] Refactor speech bubbles into single shared module (`src/speechBubble.js`)
 - [x] Gemini flies to spawn location, shows code, waits 2s, then spawns object
 - [x] Gemini holds position during spawn animation
+- [x] Increase code font size in speech bubble (11px → 13px)
+- [x] Health bar height consistency fixed
+- [x] Enemy position lowered (0.60 → 0.65)
+- [x] Crash size tuned (initial radius 12 → 8)
+- [x] Crash growth rate increased (0.08 → 0.15)
+- [x] Suction strength reduced (300 → 150)
+- [x] Victory sequence overhaul:
+  - [x] Faster particle/text fading
+  - [x] Eye fades out instead of bouncing
+  - [x] Confetti reduced (12 particles, stops after 5 rounds)
+  - [x] Search bar restores to center with playground message
+  - [x] Victory text as Box2D body
+  - [x] Play Again button as draggable Box2D body
+  - [x] Google UI elements removed on victory
 
 ---
 
@@ -77,18 +91,6 @@ When Gemini appears, start a **click-to-continue story sequence**:
 
 ---
 
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/renderer.js` | Apply shake offset |
-| `src/combat/theCrash.js` | Add shake trigger on consume |
-| `src/intro.js` | Speed up bar, story tutorial steps, spotlight effect, spawn tank |
-| `src/googlepage.js` | Pop-in animation for elements, expose Sign In button for tutorial |
-| `src/main.js` | Wire up tutorial click handlers, pass executor to intro |
-
----
-
 ## 3. Environment Deterioration Improvements
 
 Current deterioration makes the page look too chaotic - bad gameplay experience.
@@ -99,20 +101,7 @@ Current deterioration makes the page look too chaotic - bad gameplay experience.
 
 ---
 
-## 4. Health Bar Fixes
-
-- **Bug**: Blinking red bar has different height than the blue bar
-- Fix height consistency between states
-
----
-
-## 5. Enemy Position
-
-- Bring The Crash down a little (currently too high?)
-
----
-
-## 6. Gemini Icon Danger Zone
+## 4. Gemini Icon Danger Zone
 
 Gemini icon should be vulnerable to The Crash's suction:
 
@@ -133,34 +122,6 @@ Gemini icon should be vulnerable to The Crash's suction:
 
 ---
 
-## 7. Victory Sequence Overhaul
-
-### A. Object destruction on victory
-
-- When enemy is destroyed, everything spills out **faster**
-- Spilled objects **vanish faster** too
-- Eye should NOT be recreated - let it vanish when enemy dies
-
-### B. Confetti
-
-- **Reduce** confetti amount (too much currently)
-- Confetti should **stop after 5 seconds**
-
-### C. Search bar restoration
-
-- If search bar was moved out of position or destroyed during gameplay:
-  - Bring it back to original position
-  - Set placeholder text: "Create more things if you like. This is a playground."
-
-### D. Victory UI as Box2D elements
-
-- Victory text: Create as a Box2D body at top of screen
-- "Play Again" button: Create as clickable Box2D body
-- **Remove** all other Box2D elements (spawned objects, debris)
-- **Remove** all non-Box2D elements from victory screen except confetti
-
----
-
 ## Verification Checklist
 
 - [ ] **Gemini danger**: Move Gemini close to Crash -> gets slowly sucked in, game over if consumed
@@ -171,9 +132,3 @@ Gemini icon should be vulnerable to The Crash's suction:
 - [ ] **Tank spawns**: Gemini auto-creates tank as demonstration
 - [ ] **Gameplay**: After tutorial, normal search/create flow works
 - [ ] **Deterioration**: Effects are subtle, not chaotic
-- [ ] **Health bar**: Red and blue bars have same height
-- [ ] **Enemy position**: Crash appears at better vertical position
-- [ ] **Victory spill**: Objects fly out fast and vanish quickly, eye gone
-- [ ] **Confetti**: Reduced amount, stops after 5 seconds
-- [ ] **Search bar**: Returns to center with playground message
-- [ ] **Victory UI**: Text and Play Again are Box2D bodies, clean screen

@@ -51,7 +51,7 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
   let eyeFallY = 0;
   let eyeFallVy = 0;
   let eyeRotation = 0;
-  let eyeFinalY = 0;
+  let eyeAlpha = 1; // Eye fades out on victory
 
   // Simple pseudo-random from seed
   function seededRandom() {
@@ -64,8 +64,8 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
     victoryStarted = true;
 
     eyeFallY = eyePy;
-    eyeFallVy = -8; // Initial upward pop
-    eyeFinalY = canvas.height - eyePr - 20;
+    eyeFallVy = -5; // Initial upward pop (slower)
+    eyeAlpha = 1;
 
     // Generate explosion particles
     EXPLOSION_PARTICLES.length = 0;
@@ -103,41 +103,28 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
   }
 
   function updateVictoryAnimation(dt) {
-    // Update eye fall
-    eyeFallVy += 800 * dt; // gravity
+    // Update eye - falls and fades out (no bounce)
+    eyeFallVy += 400 * dt; // slower gravity
     eyeFallY += eyeFallVy * dt;
-    eyeRotation += 5 * dt;
+    eyeRotation += 3 * dt;
+    eyeAlpha = Math.max(0, eyeAlpha - dt * 0.4); // Fade out over ~2.5 seconds
 
-    // Bounce off ground
-    if (eyeFallY >= eyeFinalY) {
-      eyeFallY = eyeFinalY;
-      eyeFallVy = -eyeFallVy * 0.4;
-      if (Math.abs(eyeFallVy) < 20) eyeFallVy = 0;
-    }
-
-    // Update explosion particles
+    // Update explosion particles (fade faster)
     for (const p of EXPLOSION_PARTICLES) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 300 * dt; // gravity
-      p.alpha = Math.max(0, p.alpha - dt * 0.4);
+      p.alpha = Math.max(0, p.alpha - dt * 1.0); // 2.5x faster fade
       p.rotation += p.rotationSpeed * dt;
     }
 
-    // Update scattered texts
+    // Update scattered texts (fade faster, no bounce)
     for (const t of SCATTERED_TEXTS) {
       t.x += t.vx * dt;
       t.y += t.vy * dt;
       t.vy += 200 * dt; // gravity
-      t.alpha = Math.max(0, t.alpha - dt * 0.15);
+      t.alpha = Math.max(0, t.alpha - dt * 0.5); // 3x faster fade
       t.rotation += t.rotationSpeed * dt;
-
-      // Bounce off ground
-      if (t.y > canvas.height - 30) {
-        t.y = canvas.height - 30;
-        t.vy = -t.vy * 0.5;
-        t.vx *= 0.8;
-      }
     }
   }
 
@@ -178,13 +165,16 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
     }
     ctx.restore();
 
-    // Draw fallen eye at center-bottom
-    const eyeX = canvas.width / 2;
-    ctx.save();
-    ctx.translate(eyeX, eyeFallY);
-    ctx.rotate(eyeRotation);
-    drawEyeLocal(0, 0, eyePr);
-    ctx.restore();
+    // Draw falling eye (fades out)
+    if (eyeAlpha > 0) {
+      const eyeX = canvas.width / 2;
+      ctx.save();
+      ctx.globalAlpha = eyeAlpha;
+      ctx.translate(eyeX, eyeFallY);
+      ctx.rotate(eyeRotation);
+      drawEyeLocal(0, 0, eyePr);
+      ctx.restore();
+    }
   }
 
   // Eye drawing without position transform (for victory animation)

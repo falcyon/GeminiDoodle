@@ -148,7 +148,7 @@ const intro = createIntro(world, canvas, healthBar, geminiIcon, searchBar);
 const gameState = createGameState(healthBar);
 const crash = createCrash(world, gameState, healthBar, W, H);
 const crashRenderer = createCrashRenderer(canvas, crash, gameState, world);
-const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro);
+const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world);
 
 // Wire up target provider to aim at The Crash's eye
 executor.setTargetProvider(() => crash.getEyePosition());

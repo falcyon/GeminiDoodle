@@ -35,8 +35,8 @@ export function drawSpeechBubble(ctx, options) {
   const isDark = theme === 'dark' || (theme === 'auto' && isCode);
 
   const padding = 10;
-  const fontSize = 11;
-  const lineHeight = 14;
+  const fontSize = 13;
+  const lineHeight = 17;
   const tailH = 10;
 
   // Theme colors

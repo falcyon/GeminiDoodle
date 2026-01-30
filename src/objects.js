@@ -20,6 +20,24 @@ export function unregisterObject(obj) {
   if (i !== -1) objects.splice(i, 1);
 }
 
+/**
+ * Remove all spawned objects (created by executor) from the world.
+ * Used on victory to clean up the screen.
+ */
+export function clearSpawnedObjects(world) {
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const obj = objects[i];
+    if (obj.spawned) {
+      try {
+        world.destroyBody(obj.body);
+      } catch (e) {
+        // Body may already be destroyed
+      }
+      objects.splice(i, 1);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Factory helpers
 // ---------------------------------------------------------------------------

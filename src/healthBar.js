@@ -128,9 +128,10 @@ export function createHealthBar(canvas) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.fillRect(0, height - BAR_HEIGHT, width, BAR_HEIGHT);
 
-    // Main bar with gradient
+    // Main bar with gradient (detect if red or blue based on barColor)
     const grad = ctx.createLinearGradient(0, height - BAR_HEIGHT, 0, height);
-    if (introComplete) {
+    const isRed = barColor === '#d93025' || introComplete;
+    if (isRed) {
       grad.addColorStop(0, '#ff4444');
       grad.addColorStop(0.5, barColor);
       grad.addColorStop(1, '#aa1111');
@@ -146,13 +147,6 @@ export function createHealthBar(canvas) {
     // Highlight line at top
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.fillRect(0, height - BAR_HEIGHT, drawWidth, 1);
-
-    // Pulsing glow when low health
-    if (introComplete && currentHealth < maxHealth * 0.3) {
-      const pulse = 0.3 + 0.2 * Math.sin(Date.now() * 0.01);
-      ctx.fillStyle = `rgba(255, 0, 0, ${pulse})`;
-      ctx.fillRect(0, height - BAR_HEIGHT - 2, drawWidth, BAR_HEIGHT + 4);
-    }
   }
 
   return {

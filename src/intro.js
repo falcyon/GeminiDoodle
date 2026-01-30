@@ -65,7 +65,7 @@ export function createIntro(world, canvas, healthBar, geminiIcon, searchBar) {
 
     const dinoArea = 4 * HITBOX_HW * HITBOX_HH;
     dinoBody.createFixture(new planck.Box(HITBOX_HW, HITBOX_HH, new planck.Vec2(HITBOX_OFFSET_X, HITBOX_OFFSET_Y), Math.PI / 6), {
-      density: 0.2 / dinoArea,
+      density: 0.3 / dinoArea,
       friction: 0.5,
       restitution: 0.1,
       filterCategoryBits: CAT_DINO,

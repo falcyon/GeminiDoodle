@@ -25,7 +25,7 @@ export function createCrash(world, gameState, healthBar, W, H) {
   // --- Spawn position: off-screen left, centered vertically ---
   const startRadius = CRASH_INITIAL_RADIUS;
   let cx = -startRadius;
-  let cy = H * 0.60;
+  let cy = H * 0.65;
 
   // --- Entry target: just enough to be fully on screen ---
   let targetX = startRadius + 10; // stop once visual is fully visible

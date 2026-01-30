@@ -1,8 +1,8 @@
 // Debug mode — toggle hitboxes, mass labels, suction lines
-export const DEBUG = true;
+export const DEBUG = false;
 
 // Pixels per meter — controls how large the physics world appears on screen
-export const SCALE = 6;
+export const SCALE = 8.5;
 
 // Wall half-thickness in meters
 export const WALL_THICKNESS = 0.5;
