@@ -50,6 +50,16 @@ const overlay = createLoadingOverlay(canvas);
 const cache = createCache();
 let isGenerating = false;
 
+// Thinking messages shown while Gemini is generating
+const THINKING_MESSAGES = [
+  'Hmm, let me think about this...',
+  'Cooking up something special...',
+  'Conceiving your creation...',
+  'Imagining the physics...',
+  'Channeling creative energy...',
+  'Materializing your idea...',
+];
+
 async function handleSearch(text, searchBarBody) {
   if (!intro.isComplete()) return;
   if (isGenerating) return;
@@ -60,6 +70,9 @@ async function handleSearch(text, searchBarBody) {
   // Stop animated placeholder when user starts searching
   searchBar.stopAnimatedPlaceholder();
 
+  // Timer to show thinking message after 5 seconds
+  let thinkingTimer = null;
+
   try {
     // Normalize prompt via Gemini Flash → 1-2 word cache key
     const key = await normalizePrompt(text);
@@ -68,13 +81,32 @@ async function handleSearch(text, searchBarBody) {
     // Check cache (localStorage L1, then Firebase L2)
     const cached = await cache.get(key);
     if (cached) {
+      // Show thinking message and delay 3 seconds to simulate generation
+      const thinkingMsg = THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)];
+      geminiIcon.setSpeech(thinkingMsg);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      geminiIcon.hideSpeech();
+
       // Spawn below Gemini's current position
       await animateGeminiSpawn(cached);
       gameState.trackObjectCreated();
       return;
     }
 
+    // Start thinking interval - show new message every 5 seconds during generation
+    thinkingTimer = setInterval(() => {
+      const thinkingMsg = THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)];
+      geminiIcon.setSpeech(thinkingMsg);
+    }, 5000);
+
     const { code } = await generateObject(text);
+
+    // Clear thinking interval and message
+    if (thinkingTimer) {
+      clearInterval(thinkingTimer);
+      thinkingTimer = null;
+    }
+    geminiIcon.hideSpeech();
 
     // Spawn below Gemini's current position
     await animateGeminiSpawn(code);
@@ -84,6 +116,10 @@ async function handleSearch(text, searchBarBody) {
     console.error('Generation failed:', e);
     overlay.showError(e.message);
   } finally {
+    // Clean up thinking interval if still running
+    if (thinkingTimer) {
+      clearInterval(thinkingTimer);
+    }
     isGenerating = false;
     searchBar.setLoading(false);
     geminiIcon.setLoading(false);
