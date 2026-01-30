@@ -107,5 +107,28 @@ export function createExecutor(world) {
     return updaters;
   }
 
-  return { execute, getUpdaters, setTargetProvider };
+  /**
+   * Clear all ephemeral bodies (bullets, particles, etc.)
+   * and stop all updaters. Called on game over.
+   */
+  function clearAll() {
+    // Destroy all ephemeral bodies
+    for (const obj of ephemeral) {
+      try {
+        if (obj.body && obj.body.getWorld()) {
+          unregisterObject(obj);
+          world.destroyBody(obj.body);
+        }
+      } catch (e) { /* Body may already be destroyed */ }
+    }
+    ephemeral.length = 0;
+
+    // Mark all updaters as dead so they stop running
+    for (const u of updaters) {
+      u.dead = true;
+    }
+    updaters.length = 0;
+  }
+
+  return { execute, getUpdaters, setTargetProvider, clearAll };
 }

@@ -148,7 +148,7 @@ const intro = createIntro(world, canvas, healthBar, geminiIcon, searchBar, googl
 const gameState = createGameState(healthBar);
 const crash = createCrash(world, gameState, healthBar, W, H, geminiIcon);
 const crashRenderer = createCrashRenderer(canvas, crash, gameState, world);
-const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash);
+const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash, executor);
 
 // Wire up target provider to aim at The Crash's eye
 executor.setTargetProvider(() => crash.getEyePosition());
@@ -210,7 +210,8 @@ function loop() {
   }
 
   // Run all updaters from generated objects (with auto-removal on error)
-  if (state !== 'defeat') {
+  // Skip in victory/defeat states to stop all spawned object behavior
+  if (state !== 'defeat' && state !== 'victory') {
     const updaters = executor.getUpdaters();
     for (let i = updaters.length - 1; i >= 0; i--) {
       try {

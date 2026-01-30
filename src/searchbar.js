@@ -146,7 +146,7 @@ export function createSearchBar(world, x, y, onSubmit) {
     }
   });
 
-  // Victory restoration: move back to center, reset to static, show playground message
+  // End screen restoration: move back to center, reset to static, show playground message
   function restoreForVictory() {
     // Reset position
     body.setTransform(new planck.Vec2(originalX, originalY), 0);
@@ -156,10 +156,10 @@ export function createSearchBar(world, x, y, onSubmit) {
     // Reset to static so it doesn't fall
     body.setType('static');
 
-    // Clear any text and show victory placeholder
+    // Clear any text and show end screen placeholder
     obj.text = '';
     obj.loading = false;
-    obj.victoryPlaceholder = 'Create more things if you like. This is a playground.';
+    obj.victoryPlaceholder = 'Keep creating things. This is a playground!';
 
     // Stop animated placeholder
     stopAnimatedPlaceholder();

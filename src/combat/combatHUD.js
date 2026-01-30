@@ -6,7 +6,7 @@ import { SCALE } from '../constants.js';
  * Combat HUD — victory and defeat end screens with Box2D physics elements.
  * Both screens share common cleanup and UI creation logic.
  */
-export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash) {
+export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash, executor) {
   const ctx = canvas.getContext('2d');
 
   // Shared state
@@ -156,6 +156,11 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
     if (cleanupDone) return;
     cleanupDone = true;
 
+    // Stop all updaters and clear ephemeral bodies (bullets, particles)
+    if (executor?.clearAll) {
+      executor.clearAll();
+    }
+
     // Remove Google page elements
     const objects = getObjects();
     const typesToRemove = ['logoletter', 'button', 'textlink', 'appsgrid', 'footerbar', 'dino'];
@@ -177,7 +182,7 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
     // Clear spawned objects (AI-generated debris)
     clearSpawnedObjects(world);
 
-    // Restore search bar to center
+    // Restore search bar to center (for both victory and defeat)
     if (searchBar?.restoreForVictory) {
       searchBar.restoreForVictory();
     }
@@ -191,6 +196,7 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
     endScreenBodiesCreated = true;
 
     const W = canvas.width / SCALE;
+    const H = canvas.height / SCALE;
     const reason = gameState.defeatReason;
     const isGeminiConsumed = reason === 'gemini_consumed';
 
@@ -217,10 +223,10 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
 
     const textHH = 4;
 
-    // Create main text body - spawn just above screen top so it falls in nicely
+    // Create main text body - spawn near top of visible screen so it's immediately visible
     mainTextBody = world.createBody({
       type: 'dynamic',
-      position: new planck.Vec2(W / 2, -textHH * 2),
+      position: new planck.Vec2(W / 2, H * 0.15),
       angularDamping: 2.0,
       linearDamping: 0.3,
     });
@@ -230,8 +236,6 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
       restitution: 0.3,
     });
     mainTextBody.setAngularVelocity((Math.random() - 0.5) * 0.3);
-    // Give it initial downward velocity for faster appearance
-    mainTextBody.setLinearVelocity(new planck.Vec2(0, 20));
 
     const mainTextObj = {
       body: mainTextBody,
@@ -256,7 +260,7 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
 
       subtitleBody = world.createBody({
         type: 'dynamic',
-        position: new planck.Vec2(W / 2 + (Math.random() - 0.5) * 10, -subHH * 3),
+        position: new planck.Vec2(W / 2 + (Math.random() - 0.5) * 10, H * 0.25),
         angularDamping: 2.0,
         linearDamping: 0.3,
       });
@@ -265,8 +269,6 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
         friction: 0.5,
         restitution: 0.2,
       });
-      // Give it initial velocity to follow the main text
-      subtitleBody.setLinearVelocity(new planck.Vec2(0, 15));
 
       const subtitleObj = {
         body: subtitleBody,
