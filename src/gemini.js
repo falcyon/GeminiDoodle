@@ -1,11 +1,15 @@
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-// Using gemini-2.0-flash for code generation (faster, more reliable)
-const API_URL =
+// Primary: gemini-3-pro-preview for code generation
+const PRIMARY_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${API_KEY}`;
+// Fallback: gemini-2.0-flash if primary fails
+const FALLBACK_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+// Flash for normalization (cheap, fast)
 const FLASH_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
 
-const SYSTEM_PROMPT = `You generate planck.js code for a Box2D physics game. Return ONLY executable JS — no markdown, no comments, no blank lines.
+const SYSTEM_PROMPT = `You generate planck.js code for a Box2D physics game. The objecctive of the game is to use the object you create to destroy the enemy. Return ONLY executable JS — no markdown, no comments, no blank lines.
 Machine-executed only. Maximize conciseness: single-letter vars, inline everything, only create a variable if referenced more than once.
 
 Available: planck, world, registerObject(obj), W, H, spawnX, spawnY
@@ -17,7 +21,7 @@ Joints: RevoluteJoint, WeldJoint, DistanceJoint, PrismaticJoint
 For continuous behavior: return {update:function(){}} (called 60fps).
 Objects spawn RIGHT side, should FACE and MOVE LEFT.
 If input is gibberish: throw new Error("Cannot understand request");
-Be CREATIVE — use multiple bodies + joints. Don't just make a single shape.
+Be CREATIVE — use multiple bodies + joints. Don't just make a single shape. Also try to include things like bullets and other ephemeral objects. 
 
 EXAMPLES:
 User: "ball"
@@ -156,17 +160,30 @@ export async function generateObject(userPrompt) {
     parts: [{ text: `Create: "${userPrompt}"` }],
   });
 
-  const response = await fetchWithRetry(API_URL, {
+  const requestBody = JSON.stringify({
+    contents: conversationHistory,
+    generationConfig: {
+      temperature: 0.8,
+      maxOutputTokens: 16384,
+    },
+  });
+
+  const requestOptions = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: conversationHistory,
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 16384,
-      },
-    }),
-  });
+    body: requestBody,
+  };
+
+  // Try primary model first (gemini-3-pro-preview)
+  let response = await fetchWithRetry(PRIMARY_URL, requestOptions);
+  let usedFallback = false;
+
+  // If primary fails, try fallback (gemini-2.0-flash)
+  if (!response.ok) {
+    console.warn(`Primary model failed (${response.status}), trying fallback...`);
+    response = await fetchWithRetry(FALLBACK_URL, requestOptions);
+    usedFallback = true;
+  }
 
   if (!response.ok) {
     conversationHistory.pop();
@@ -187,7 +204,8 @@ export async function generateObject(userPrompt) {
     throw new Error('Gemini response was truncated (code too long). Try a simpler request.');
   }
 
-  console.log('[Gemini raw response]', text);
+  const modelUsed = usedFallback ? 'gemini-2.0-flash (fallback)' : 'gemini-3-pro-preview';
+  console.log(`[Gemini raw response - ${modelUsed}]`, text);
 
   conversationHistory.push({
     role: 'model',
