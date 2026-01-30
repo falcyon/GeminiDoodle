@@ -12,11 +12,15 @@ import { drawSpeechBubble } from './speechBubble.js';
 export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
   const ctx = canvas.getContext('2d');
   const startTime = Date.now();
+  let lastFrameTime = Date.now();
 
   // Weathering effect state
   let weatheringIntensity = 0;
   const WEATHERING_START = 3000;   // Start after 3 seconds
   const WEATHERING_RAMP = 15000;   // Full intensity over 15 more seconds
+
+  // Screen shake provider (set via setShakeProvider)
+  let shakeProvider = null;
 
   // Pseudo-random for consistent noise
   let noiseSeed = 0;
@@ -92,11 +96,30 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
 
   function draw() {
     const { width, height } = canvas;
+
+    // Calculate delta time for shake decay
+    const now = Date.now();
+    const dt = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+
+    // Get shake offset if provider is set
+    let shakeX = 0;
+    let shakeY = 0;
+    if (shakeProvider) {
+      const shake = shakeProvider(dt);
+      shakeX = shake.x;
+      shakeY = shake.y;
+    }
+
     ctx.clearRect(0, 0, width, height);
+
+    // Apply shake transform
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
 
     // Background
     ctx.fillStyle = COLORS.background;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(-shakeX, -shakeY, width, height);
 
     // Weathering effects on background (disabled for now)
     // drawWeatheringEffects(width, height);
@@ -117,8 +140,10 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
     }
     ctx.globalAlpha = 1.0;
 
-    // All tracked bodies
+    // All tracked bodies (gemini-icon drawn last to stay on top)
     const objects = getObjects();
+    let geminiObj = null;
+
     for (let i = 0; i < objects.length; i++) {
       const obj = objects[i];
 
@@ -127,6 +152,12 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
 
       // Skip objects with invalid or destroyed bodies
       if (!obj.body || typeof obj.body.getAngle !== 'function') {
+        continue;
+      }
+
+      // Defer gemini-icon to draw last
+      if (obj.type === 'gemini-icon') {
+        geminiObj = obj;
         continue;
       }
 
@@ -151,14 +182,16 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
         drawAppsGrid(ctx, obj);
       } else if (obj.type === 'footerbar') {
         drawFooterBar(ctx, obj);
-      } else if (obj.type === 'gemini-icon') {
-        drawGeminiIcon(ctx, obj);
       } else if (obj.type === 'dino') {
         drawDino(ctx, obj);
       } else if (obj.type === 'victory-text') {
         drawVictoryText(ctx, obj);
       } else if (obj.type === 'victory-button') {
         drawVictoryButton(ctx, obj);
+      } else if (obj.type === 'defeat-text') {
+        drawDefeatText(ctx, obj);
+      } else if (obj.type === 'defeat-button') {
+        drawDefeatButton(ctx, obj);
       } else {
         drawRect(ctx, obj);
       }
@@ -168,6 +201,21 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
         drawMassLabel(ctx, obj);
       }
 
+      ctx.restore();
+    }
+
+    // Draw Gemini icon last so it's always on top
+    if (geminiObj && !geminiObj.hidden) {
+      const pos = geminiObj.body.getPosition();
+      const angle = geminiObj.body.getAngle();
+      ctx.save();
+      ctx.translate(pos.x * SCALE, pos.y * SCALE);
+      ctx.rotate(angle);
+      drawGeminiIcon(ctx, geminiObj);
+      if (DEBUG) {
+        drawDebugHitbox(ctx, geminiObj);
+        drawMassLabel(ctx, geminiObj);
+      }
       ctx.restore();
     }
 
@@ -192,9 +240,15 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
       ctx.fill();
     }
 
+    // End shake transform
+    ctx.restore();
   }
 
-  return { draw };
+  function setShakeProvider(provider) {
+    shakeProvider = provider;
+  }
+
+  return { draw, setShakeProvider };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +258,28 @@ export function createRenderer(canvas, getObjects, sceneRefs, inputState) {
 function bezierEase(t) {
   // Cubic bezier ease-in-out approximation
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/**
+ * Linearly interpolate between two hex colors
+ */
+function lerpColor(color1, color2, t) {
+  const c1 = parseInt(color1.slice(1), 16);
+  const c2 = parseInt(color2.slice(1), 16);
+
+  const r1 = (c1 >> 16) & 0xff;
+  const g1 = (c1 >> 8) & 0xff;
+  const b1 = c1 & 0xff;
+
+  const r2 = (c2 >> 16) & 0xff;
+  const g2 = (c2 >> 8) & 0xff;
+  const b2 = c2 & 0xff;
+
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
 function drawGeminiSparkle(ctx, cx, cy, size) {
@@ -467,6 +543,62 @@ function drawVictoryButton(ctx, obj) {
   ctx.textAlign = 'left';
 }
 
+function drawDefeatText(ctx, obj) {
+  const h = obj.hh * 2 * SCALE;
+  const fontSize = Math.max(36, h * 0.8);
+  const time = Date.now() * 0.001;
+
+  // Glitch offset
+  const glitchX = (Math.sin(time * 20) * 2 + Math.random() - 0.5) * 3;
+  const glitchY = (Math.cos(time * 15) + Math.random() - 0.5) * 2;
+
+  ctx.save();
+  ctx.font = `bold ${fontSize}px "Product Sans", Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Ghost copies for glitch effect
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = obj.glitchColor1 || '#ff0040';
+  ctx.fillText(obj.label, glitchX + 3, glitchY - 2);
+  ctx.fillStyle = obj.glitchColor2 || '#00ff41';
+  ctx.fillText(obj.label, -glitchX - 2, -glitchY + 2);
+
+  // Main text - flicker between colors
+  ctx.globalAlpha = 1;
+  const colors = obj.colors || ['#ff0040', '#ffffff'];
+  ctx.fillStyle = colors[Math.floor(time * 8) % colors.length];
+  ctx.fillText(obj.label, 0, 0);
+
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawDefeatButton(ctx, obj) {
+  const w = obj.hw * 2 * SCALE;
+  const h = obj.hh * 2 * SCALE;
+  const r = h / 2;
+
+  // Background with red glow
+  ctx.save();
+  ctx.shadowColor = '#ff0040';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2, -h / 2, w, h, r);
+  ctx.fillStyle = '#ff0040';
+  ctx.fill();
+  ctx.restore();
+
+  // Label
+  const fontSize = Math.max(14, h * 0.45);
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(obj.label, 0, 0);
+  ctx.textAlign = 'left';
+}
+
 function drawAppsGrid(ctx, obj) {
   const h = obj.hh * 2 * SCALE;
   const dotR = Math.max(2, h * 0.08);
@@ -558,11 +690,42 @@ function drawGeminiIcon(ctx, obj) {
     ctx.globalAlpha = 1;
   }
 
+  // Danger zone visual feedback: stretch and warning glow
+  const dangerLevel = obj.dangerLevel || 0;
+  if (dangerLevel > 0) {
+    // Pulsing warning glow
+    const pulseTime = Date.now() * 0.008;
+    const pulseIntensity = 0.5 + Math.sin(pulseTime) * 0.5;
+    const glowAlpha = dangerLevel * pulseIntensity * 0.6;
+
+    ctx.save();
+    ctx.globalAlpha = glowAlpha;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff0040';
+    ctx.fill();
+    ctx.restore();
+
+    // Apply stretch distortion toward void (horizontal stretch simulates pull)
+    const stretchX = 1 + dangerLevel * 0.4; // stretch up to 40% wider
+    const stretchY = 1 - dangerLevel * 0.2; // compress up to 20% shorter
+    ctx.scale(stretchX, stretchY);
+  }
+
   // Gemini sparkle: four-pointed star drawn with bezier curves
   const grad = ctx.createLinearGradient(-r, -r, r, r);
-  grad.addColorStop(0.5, '#4285f4');
-  grad.addColorStop(1, '#efb401');
-  grad.addColorStop(0.2, '#e43e2b');
+
+  // Shift colors toward red/warning when in danger
+  if (dangerLevel > 0.3) {
+    const t = (dangerLevel - 0.3) / 0.7; // 0 to 1 as danger increases
+    grad.addColorStop(0.5, lerpColor('#4285f4', '#ff4040', t));
+    grad.addColorStop(1, lerpColor('#efb401', '#ff0040', t));
+    grad.addColorStop(0.2, '#e43e2b');
+  } else {
+    grad.addColorStop(0.5, '#4285f4');
+    grad.addColorStop(1, '#efb401');
+    grad.addColorStop(0.2, '#e43e2b');
+  }
 
   ctx.fillStyle = grad;
   ctx.beginPath();

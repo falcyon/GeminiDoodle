@@ -3,90 +3,146 @@ import { clearSpawnedObjects, registerObject, getObjects } from '../objects.js';
 import { SCALE } from '../constants.js';
 
 /**
- * Combat HUD — victory confetti and defeat overlay.
- * Victory: Gemini congratulates with stats, confetti falls, Box2D UI elements
- * Defeat: Glitchy "CRASHED" overlay
+ * Combat HUD — victory and defeat end screens with Box2D physics elements.
+ * Both screens share common cleanup and UI creation logic.
  */
-export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world) {
+export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash) {
   const ctx = canvas.getContext('2d');
 
-  let clickListenerAdded = false;
-  let searchBarRestored = false;
-  let spawnedObjectsCleared = false;
-  let victoryBodiesCreated = false;
-  let googleElementsHidden = false;
-  let playAgainClickAdded = false;
+  // Shared state
+  let gameOverTime = 0;
+  let cleanupDone = false;
+  let endScreenBodiesCreated = false;
+  let playAgainButtonCreated = false;
+  let speechShown = false;
 
-  // Box2D victory text body
-  let victoryTextBody = null; // eslint-disable-line no-unused-vars
+  // Particles
+  const particles = [];
+  let particlesInitialized = false;
 
-  // Confetti particles
-  const confetti = [];
-  let confettiInitialized = false;
+  // Box2D bodies for end screen
+  let mainTextBody = null;
+  let subtitleBody = null;
+  let playAgainBody = null;
 
-  function initConfetti() {
-    if (confettiInitialized) return;
-    confettiInitialized = true;
+  /**
+   * Initialize particles (confetti falls for victory, debris rises for defeat)
+   */
+  function initParticles(isVictory) {
+    if (particlesInitialized) return;
+    particlesInitialized = true;
 
-    const colors = ['#0F9D58', '#F4B400', '#4285F4', '#DB4437'];
-    for (let i = 0; i < 12; i++) {
-      confetti.push({
-        x: Math.random() * canvas.width,
-        y: -20 - Math.random() * 1000,
-        vx: (Math.random() - 0.5) * 4,
-        vy: 2 + Math.random() * 4,
-        size: 6 + Math.random() * 10,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.3,
-        shape: Math.random() > 0.5 ? 'rect' : 'circle',
-        rounds: 0, // track how many times this confetti has fallen
-      });
+    const colors = isVictory
+      ? ['#0F9D58', '#F4B400', '#4285F4', '#DB4437']
+      : ['#1a1a1a', '#2d2d2d', '#ff0040', '#440015', '#333333'];
+
+    const count = isVictory ? 25 : 50;
+
+    for (let i = 0; i < count; i++) {
+      if (isVictory) {
+        // Confetti falls from top
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: -20 - Math.random() * 800,
+          vx: (Math.random() - 0.5) * 4,
+          vy: 2 + Math.random() * 4,
+          size: 6 + Math.random() * 10,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: (Math.random() - 0.5) * 0.3,
+          shape: Math.random() > 0.5 ? 'rect' : 'circle',
+          rounds: 0,
+          maxRounds: 5,
+          rising: false,
+        });
+      } else {
+        // Debris rises from bottom
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: canvas.height + 20 + Math.random() * 600,
+          vx: (Math.random() - 0.5) * 2,
+          vy: -(1 + Math.random() * 2.5), // Negative = rising
+          size: 4 + Math.random() * 12,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: (Math.random() - 0.5) * 0.15,
+          shape: Math.random() > 0.3 ? 'rect' : 'triangle',
+          rounds: 0,
+          maxRounds: 8,
+          rising: true,
+        });
+      }
     }
   }
 
-  function updateConfetti() {
-    for (const c of confetti) {
-      // Skip confetti that has finished its rounds
-      if (c.rounds >= 5) continue;
+  function updateParticles() {
+    for (const p of particles) {
+      if (p.rounds >= p.maxRounds) continue;
 
-      c.x += c.vx;
-      c.y += c.vy;
-      c.vy += 0.1; // gravity
-      c.vy = Math.min(c.vy, 2); // terminal velocity
-      c.rotation += c.rotationSpeed;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.rotationSpeed;
 
-      // Wobble
-      c.vx += (Math.random() - 0.5) * 0.2;
-      c.vx *= 0.99;
+      p.vx += (Math.random() - 0.5) * 0.1;
+      p.vx *= 0.98;
 
-      // Reset if off screen (up to 5 rounds)
-      if (c.y > canvas.height + 20) {
-        c.rounds++;
-        if (c.rounds < 5) {
-          c.y = -20;
-          c.x = Math.random() * canvas.width;
-          c.vy = 0.1 + Math.random();
+      if (p.rising) {
+        // Rising debris - slight upward acceleration, slow down over time
+        p.vy *= 0.999;
+        p.vy = Math.max(p.vy, -3); // Cap rising speed
+
+        // Reset when off top of screen
+        if (p.y < -20) {
+          p.rounds++;
+          if (p.rounds < p.maxRounds) {
+            p.y = canvas.height + 20 + Math.random() * 200;
+            p.x = Math.random() * canvas.width;
+            p.vy = -(0.5 + Math.random() * 2);
+          }
+        }
+      } else {
+        // Falling confetti - gravity
+        p.vy += 0.08;
+        p.vy = Math.min(p.vy, 3);
+
+        // Reset when off bottom of screen
+        if (p.y > canvas.height + 20) {
+          p.rounds++;
+          if (p.rounds < p.maxRounds) {
+            p.y = -20;
+            p.x = Math.random() * canvas.width;
+            p.vy = 0.5 + Math.random() * 2;
+          }
         }
       }
     }
   }
 
-  function drawConfetti() {
-    for (const c of confetti) {
-      // Skip confetti that has finished its rounds or is off screen
-      if (c.rounds >= 5 || c.y > canvas.height + 20) continue;
+  function drawParticles() {
+    for (const p of particles) {
+      if (p.rounds >= p.maxRounds) continue;
+      // Skip if off-screen
+      if (p.rising && p.y < -20) continue;
+      if (!p.rising && p.y > canvas.height + 20) continue;
 
       ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(c.rotation);
-      ctx.fillStyle = c.color;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.fillStyle = p.color;
 
-      if (c.shape === 'rect') {
-        ctx.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2);
-      } else {
+      if (p.shape === 'rect') {
+        ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.6);
+      } else if (p.shape === 'circle') {
         ctx.beginPath();
-        ctx.arc(0, 0, c.size / 3, 0, Math.PI * 2);
+        ctx.arc(0, 0, p.size / 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Triangle
+        ctx.beginPath();
+        ctx.moveTo(0, -p.size / 2);
+        ctx.lineTo(p.size / 2, p.size / 2);
+        ctx.lineTo(-p.size / 2, p.size / 2);
+        ctx.closePath();
         ctx.fill();
       }
       ctx.restore();
@@ -94,104 +150,193 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
   }
 
   /**
-   * Remove Google page elements (logo, buttons, etc.) on victory
+   * Common cleanup for both victory and defeat
    */
-  function removeGoogleElements() {
-    if (googleElementsHidden) return;
-    googleElementsHidden = true;
+  function cleanupForGameOver() {
+    if (cleanupDone) return;
+    cleanupDone = true;
 
+    // Remove Google page elements
     const objects = getObjects();
-    const typesToRemove = ['logoletter', 'button', 'textlink', 'appsgrid', 'footerbar'];
+    const typesToRemove = ['logoletter', 'button', 'textlink', 'appsgrid', 'footerbar', 'dino'];
     for (let i = objects.length - 1; i >= 0; i--) {
       const obj = objects[i];
       if (typesToRemove.includes(obj.type)) {
         try {
           world.destroyBody(obj.body);
-        } catch (e) {
-          // Body may already be destroyed
-        }
+        } catch (e) { /* Body may already be destroyed */ }
         objects.splice(i, 1);
       }
+    }
+
+    // Destroy The Crash
+    if (crash?.destroy) {
+      crash.destroy();
+    }
+
+    // Clear spawned objects (AI-generated debris)
+    clearSpawnedObjects(world);
+
+    // Restore search bar to center
+    if (searchBar?.restoreForVictory) {
+      searchBar.restoreForVictory();
     }
   }
 
   /**
-   * Create Box2D body for VICTORY text
+   * Create main text and subtitle as Box2D bodies
    */
-  function createVictoryBodies() {
-    if (victoryBodiesCreated) return;
-    victoryBodiesCreated = true;
+  function createEndScreenBodies(isVictory) {
+    if (endScreenBodiesCreated) return;
+    endScreenBodiesCreated = true;
 
     const W = canvas.width / SCALE;
+    const reason = gameState.defeatReason;
+    const isGeminiConsumed = reason === 'gemini_consumed';
 
-    // Remove Google page elements
-    removeGoogleElements();
+    // Main text config
+    let mainText, textHW, textType, textColors, glitch1, glitch2;
 
-    // VICTORY text - starts just above screen, falls down
-    const textHW = 20; // half-width in meters
-    const textHH = 4;  // half-height in meters
-    victoryTextBody = world.createBody({
+    if (isVictory) {
+      mainText = 'VICTORY!';
+      textHW = 20;
+      textType = 'victory-text';
+      textColors = null; // victory-text uses fixed color
+      glitch1 = null;
+      glitch2 = null;
+    } else {
+      mainText = isGeminiConsumed ? 'GEMINI LOST.' : 'CRASHED.';
+      textHW = isGeminiConsumed ? 22 : 18;
+      textType = 'defeat-text';
+      textColors = isGeminiConsumed
+        ? ['#4285f4', '#a259ff', '#4285f4', '#ffffff']
+        : ['#ff0040', '#ffffff'];
+      glitch1 = isGeminiConsumed ? '#4285f4' : '#ff0040';
+      glitch2 = isGeminiConsumed ? '#a259ff' : '#00ff41';
+    }
+
+    const textHH = 4;
+
+    // Create main text body - spawn just above screen top so it falls in nicely
+    mainTextBody = world.createBody({
       type: 'dynamic',
-      position: new planck.Vec2(W / 2, 5), // Start just inside top of screen
+      position: new planck.Vec2(W / 2, -textHH * 2),
       angularDamping: 2.0,
       linearDamping: 0.3,
     });
-    victoryTextBody.createFixture(new planck.Box(textHW, textHH), {
-      density: 0.2,
+    mainTextBody.createFixture(new planck.Box(textHW, textHH), {
+      density: 0.3,
       friction: 0.5,
-      restitution: 0.4,
+      restitution: 0.3,
     });
-    // Give it a slight initial rotation
-    victoryTextBody.setAngularVelocity((Math.random() - 0.5) * 0.3);
+    mainTextBody.setAngularVelocity((Math.random() - 0.5) * 0.3);
+    // Give it initial downward velocity for faster appearance
+    mainTextBody.setLinearVelocity(new planck.Vec2(0, 20));
 
-    const victoryObj = {
-      body: victoryTextBody,
-      type: 'victory-text',
+    const mainTextObj = {
+      body: mainTextBody,
+      type: textType,
       hw: textHW,
       hh: textHH,
-      label: 'VICTORY!',
+      label: mainText,
       color: '#00ff41',
+      colors: textColors,
+      glitchColor1: glitch1,
+      glitchColor2: glitch2,
     };
-    registerObject(victoryObj);
+    registerObject(mainTextObj);
+
+    // Subtitle (only for defeat)
+    if (!isVictory) {
+      const subtitleText = isGeminiConsumed
+        ? 'Consumed by The Crash...'
+        : 'The void consumed everything.';
+      const subHW = 20;
+      const subHH = 1.5;
+
+      subtitleBody = world.createBody({
+        type: 'dynamic',
+        position: new planck.Vec2(W / 2 + (Math.random() - 0.5) * 10, -subHH * 3),
+        angularDamping: 2.0,
+        linearDamping: 0.3,
+      });
+      subtitleBody.createFixture(new planck.Box(subHW, subHH), {
+        density: 0.25,
+        friction: 0.5,
+        restitution: 0.2,
+      });
+      // Give it initial velocity to follow the main text
+      subtitleBody.setLinearVelocity(new planck.Vec2(0, 15));
+
+      const subtitleObj = {
+        body: subtitleBody,
+        type: 'defeat-text',
+        hw: subHW,
+        hh: subHH,
+        label: subtitleText,
+        colors: ['#888888', '#666666'],
+        glitchColor1: '#444444',
+        glitchColor2: '#333333',
+      };
+      registerObject(subtitleObj);
+    }
   }
 
-  let playAgainBody = null;
-
   /**
-   * Create Play Again button as a Box2D body below search bar
+   * Create Play Again button as Box2D body
    */
-  function createPlayAgainButton() {
-    if (playAgainClickAdded || !searchBar?.body) return;
-    playAgainClickAdded = true;
+  function createPlayAgainButton(isVictory) {
+    if (playAgainButtonCreated) return;
+    playAgainButtonCreated = true;
 
-    const pos = searchBar.body.getPosition();
-    const btnX = pos.x;
-    const btnY = pos.y + 8; // 8 meters below search bar
+    const W = canvas.width / SCALE;
     const btnHW = 10;
     const btnHH = 2.5;
 
-    playAgainBody = world.createBody({
-      type: 'static',
-      position: new planck.Vec2(btnX, btnY),
-    });
-    playAgainBody.setUserData({ draggable: true });
+    // Position below search bar if available, otherwise center
+    let btnX = W / 2;
+    let btnY = -btnHH * 2; // Just above screen top
+
+    if (isVictory && searchBar?.body) {
+      const pos = searchBar.body.getPosition();
+      btnX = pos.x;
+      btnY = pos.y + 8;
+
+      // Static button for victory (below search bar)
+      playAgainBody = world.createBody({
+        type: 'static',
+        position: new planck.Vec2(btnX, btnY),
+      });
+      playAgainBody.setUserData({ draggable: true });
+    } else {
+      // Dynamic falling button for defeat
+      playAgainBody = world.createBody({
+        type: 'dynamic',
+        position: new planck.Vec2(btnX, btnY),
+        angularDamping: 2.0,
+        linearDamping: 0.3,
+      });
+      // Give it initial velocity to fall in quickly
+      playAgainBody.setLinearVelocity(new planck.Vec2(0, 25));
+    }
+
     playAgainBody.createFixture(new planck.Box(btnHW, btnHH), {
-      density: 0.5,
+      density: 0.4,
       friction: 0.6,
-      restitution: 0.2,
+      restitution: 0.3,
     });
 
     const buttonObj = {
       body: playAgainBody,
-      type: 'victory-button',
+      type: isVictory ? 'victory-button' : 'defeat-button',
       hw: btnHW,
       hh: btnHH,
-      label: 'Play Again',
-      color: '#4285F4',
+      label: isVictory ? 'Play Again' : 'Try Again',
+      color: isVictory ? '#4285F4' : '#ff0040',
     };
     registerObject(buttonObj);
 
-    // Add click listener for the button
+    // Click listener
     canvas.addEventListener('click', (e) => {
       if (!playAgainBody) return;
       const mx = e.clientX / SCALE;
@@ -199,7 +344,6 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
       const currentPos = playAgainBody.getPosition();
       const angle = playAgainBody.getAngle();
 
-      // Transform click to body-local coordinates
       const dx = mx - currentPos.x;
       const dy = my - currentPos.y;
       const cos = Math.cos(-angle);
@@ -213,123 +357,84 @@ export function createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar,
     });
   }
 
+  /**
+   * Show Gemini speech with stats
+   */
+  function showGeminiSpeech(isVictory) {
+    if (speechShown || !geminiIcon) return;
+
+    const reason = gameState.defeatReason;
+    const isGeminiConsumed = reason === 'gemini_consumed';
+
+    // Don't show speech if Gemini was consumed
+    if (!isVictory && isGeminiConsumed) return;
+
+    speechShown = true;
+    const stats = gameState.getStats();
+
+    let speech;
+    if (isVictory) {
+      const elapsed = stats.elapsed;
+      const mins = Math.floor(elapsed / 60);
+      const secs = Math.floor(elapsed % 60);
+      const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+      speech = `WE DID IT! The Crash is destroyed!\n\n`;
+      speech += `Time: ${timeStr}\n`;
+      speech += `Objects Created: ${stats.objectsCreated}\n`;
+      speech += `Objects Lost: ${stats.objectsConsumed}\n`;
+      speech += `Damage Dealt: ${Math.floor(stats.totalDamageDealt)}`;
+    } else {
+      speech = `The Crash consumed everything...\n\n`;
+      speech += `Objects Created: ${stats.objectsCreated}\n`;
+      speech += `Objects Lost: ${stats.objectsConsumed}\n`;
+      speech += `We'll get it next time!`;
+    }
+
+    geminiIcon.setSpeech(speech);
+  }
+
+  /**
+   * Main draw function - handles both victory and defeat
+   */
   function draw() {
     const state = gameState.getState();
 
-    if (state === 'victory') {
-      drawVictory();
-    } else if (state === 'defeat') {
-      drawDefeat();
+    if (state !== 'victory' && state !== 'defeat') return;
+
+    const isVictory = state === 'victory';
+
+    // Track time since game over
+    if (gameOverTime === 0) {
+      gameOverTime = Date.now();
     }
-  }
+    const timeSinceGameOver = (Date.now() - gameOverTime) / 1000;
 
-  function drawVictory() {
-    const stats = gameState.getStats();
-    const timeSinceVictory = gameState.victoryTime ? (Date.now() - gameState.victoryTime) / 1000 : 0;
+    // Initialize and draw particles
+    initParticles(isVictory);
+    updateParticles();
+    drawParticles();
 
-    // Clear spawned objects (debris) for clean victory screen
-    if (!spawnedObjectsCleared && timeSinceVictory > 0.5 && world) {
-      spawnedObjectsCleared = true;
-      clearSpawnedObjects(world);
-    }
-
-    // Restore search bar immediately on victory
-    if (!searchBarRestored && searchBar?.restoreForVictory) {
-      searchBarRestored = true;
-      searchBar.restoreForVictory();
+    // Cleanup after short delay
+    if (timeSinceGameOver > 0.3) {
+      cleanupForGameOver();
     }
 
-    // Initialize and update confetti
-    initConfetti();
-    updateConfetti();
-    drawConfetti();
-
-    // Check if dino survived
-    const dinoBody = intro?.getDinoBody?.();
-    const dinoSaved = dinoBody && dinoBody.isActive();
-
-    // Build Gemini's congratulation speech
-    const elapsed = stats.elapsed;
-    const mins = Math.floor(elapsed / 60);
-    const secs = Math.floor(elapsed % 60);
-    const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-
-    let speech = `WE DID IT! The Crash is destroyed!\n\n`;
-    speech += `Time: ${timeStr}\n`;
-    speech += `Objects Created: ${stats.objectsCreated}\n`;
-    speech += `Objects Lost: ${stats.objectsConsumed}\n`;
-    speech += `Damage Dealt: ${Math.floor(stats.totalDamageDealt)}\n\n`;
-
-    if (dinoSaved) {
-      speech += `Dino survived! Great job protecting them!`;
-    } else {
-      speech += `Dino was consumed... but we still won!`;
+    // Create end screen bodies
+    if (timeSinceGameOver > 0.5) {
+      createEndScreenBodies(isVictory);
     }
 
-    // Show speech on Gemini after a short delay
-    if (timeSinceVictory > 0.8 && geminiIcon) {
-      geminiIcon.setSpeech(speech);
+    // Show Gemini speech
+    if (timeSinceGameOver > 0.8) {
+      showGeminiSpeech(isVictory);
     }
 
-    // Spawn Box2D victory UI bodies (VICTORY text)
-    if (timeSinceVictory > 0.5) {
-      createVictoryBodies();
-    }
-
-    // Create Play Again button below search bar
-    if (timeSinceVictory > 1.0) {
-      createPlayAgainButton();
-    }
-  }
-
-  function drawDefeat() {
-    const { width, height } = canvas;
-    const time = Date.now() * 0.001;
-
-    // Full black overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Glitch distortion on text
-    const glitchX = (Math.random() - 0.5) * 4;
-    const glitchY = (Math.random() - 0.5) * 2;
-
-    // Main text with glitch offset
-    ctx.font = 'bold 72px "Product Sans", Arial, sans-serif';
-    ctx.fillStyle = DEFEAT_COLORS[Math.floor(time * 8) % DEFEAT_COLORS.length];
-    ctx.fillText('CRASHED.', width / 2 + glitchX, height / 2 - 20 + glitchY);
-
-    // Ghost copies for glitch effect
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = '#ff0040';
-    ctx.fillText('CRASHED.', width / 2 + glitchX + 3, height / 2 - 20 + glitchY - 2);
-    ctx.fillStyle = '#00ff41';
-    ctx.fillText('CRASHED.', width / 2 + glitchX - 2, height / 2 - 20 + glitchY + 2);
-    ctx.globalAlpha = 1;
-
-    // Subtitle
-    ctx.font = '20px Arial, sans-serif';
-    ctx.fillStyle = '#888888';
-    ctx.fillText('Click to retry', width / 2, height / 2 + 40);
-
-    ctx.restore();
-
-    // Add click-to-reload listener once
-    if (!clickListenerAdded) {
-      clickListenerAdded = true;
-      setTimeout(() => {
-        canvas.addEventListener('click', () => {
-          window.location.reload();
-        }, { once: true });
-      }, 500);
+    // Create Play Again button
+    if (timeSinceGameOver > 1.2) {
+      createPlayAgainButton(isVictory);
     }
   }
 
   return { draw };
 }
-
-const DEFEAT_COLORS = ['#ff0040', '#ffffff', '#ff0040', '#ffffff'];

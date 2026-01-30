@@ -24,5 +24,3 @@ A physics-based combat game where you team up with Gemini AI to defeat the **Col
 - **AI**: Google Gemini API for real-time code generation
 - **Caching**: localStorage + Firebase for generated objects
 - **Build**: Vite
-
-

@@ -20,8 +20,9 @@ import {
  *
  * - Void core: tiny kinematic sensor that destroys anything it touches
  * - Eye: kinematic body offset to the right — the weak point that takes damage
+ * @param {object} geminiIcon - The Gemini icon instance (for danger zone tracking)
  */
-export function createCrash(world, gameState, healthBar, W, H) {
+export function createCrash(world, gameState, healthBar, W, H, geminiIcon = null) {
   // --- Spawn position: off-screen left, centered vertically ---
   const startRadius = CRASH_INITIAL_RADIUS;
   let cx = -startRadius;
@@ -39,6 +40,18 @@ export function createCrash(world, gameState, healthBar, W, H) {
   let eyeTargetDir = 1;             // 1 = toward right, -1 = toward top
   let eyeJitterTimer = 0;           // time until next target change
   let currentEyeRadius = Math.max(EYE_MIN_RADIUS, startRadius * EYE_RADIUS_FRAC);
+
+  // --- Screen shake state ---
+  let shakeIntensity = 0;
+  let shakeTime = 0;
+  const SHAKE_DURATION = 0.3;       // seconds
+  const SHAKE_INTENSITY = 4;        // max pixel offset
+
+  // --- Gemini danger zone state ---
+  const GEMINI_DANGER_RADIUS = 40;     // meters - when Gemini starts getting sucked
+  const GEMINI_SUCTION_STRENGTH = 8;   // base suction force on Gemini
+  const GEMINI_VOID_RADIUS = 5;        // meters - instant death zone
+  let geminiDangerLevel = 0;           // 0 = safe, 1 = max danger (for visual feedback)
 
   // --- Create void core body (tiny sensor) ---
   const voidBody = world.createBody({
@@ -103,6 +116,9 @@ export function createCrash(world, gameState, healthBar, W, H) {
     // Schedule destruction (can't destroy during contact callback)
     scheduledDestroys.push(otherBody);
     gameState.trackObjectConsumed();
+
+    // Trigger screen shake
+    triggerShake();
   }
 
   function handleEyeContact(crashFixture, otherFixture) {
@@ -135,6 +151,26 @@ export function createCrash(world, gameState, healthBar, W, H) {
 
   // Bodies queued for destruction (can't destroy during contact callbacks)
   const scheduledDestroys = [];
+
+  // --- Screen shake functions ---
+  function triggerShake() {
+    shakeIntensity = SHAKE_INTENSITY;
+    shakeTime = SHAKE_DURATION;
+  }
+
+  function getShake(dt) {
+    if (shakeTime <= 0) return { x: 0, y: 0 };
+
+    shakeTime -= dt;
+    const progress = Math.max(0, shakeTime / SHAKE_DURATION);
+    const currentIntensity = shakeIntensity * progress;
+
+    // Random offset within intensity bounds
+    const x = (Math.random() - 0.5) * 2 * currentIntensity;
+    const y = (Math.random() - 0.5) * 2 * currentIntensity;
+
+    return { x, y };
+  }
 
   // --- Movement ---
   function updateMovement(dt) {
@@ -237,6 +273,51 @@ export function createCrash(world, gameState, healthBar, W, H) {
     }
   }
 
+  // --- Gemini danger zone: apply suction when too close ---
+  function updateGeminiDanger() {
+    if (!geminiIcon || !geminiIcon.body) {
+      geminiDangerLevel = 0;
+      return;
+    }
+
+    const geminiPos = geminiIcon.body.getPosition();
+    const dx = cx - geminiPos.x;
+    const dy = cy - geminiPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Check for instant death (touching void core)
+    if (dist < GEMINI_VOID_RADIUS) {
+      gameState.triggerDefeat('gemini_consumed');
+      geminiDangerLevel = 1;
+      return;
+    }
+
+    // Check if in danger zone
+    if (dist < GEMINI_DANGER_RADIUS) {
+      // Calculate danger level (0 at edge, 1 at void radius)
+      geminiDangerLevel = 1 - (dist - GEMINI_VOID_RADIUS) / (GEMINI_DANGER_RADIUS - GEMINI_VOID_RADIUS);
+      geminiDangerLevel = Math.max(0, Math.min(1, geminiDangerLevel));
+
+      // Apply suction force - stronger as Gemini gets closer
+      // Use exponential scaling so it's gentle at edge, strong near center
+      const suctionMultiplier = Math.pow(geminiDangerLevel, 1.5);
+      const force = GEMINI_SUCTION_STRENGTH * suctionMultiplier;
+
+      // Apply force toward void center
+      const forceX = (dx / dist) * force;
+      const forceY = (dy / dist) * force;
+
+      // Get current velocity and add suction (don't override mouse following completely)
+      const vel = geminiIcon.body.getLinearVelocity();
+      geminiIcon.body.setLinearVelocity(new planck.Vec2(
+        vel.x + forceX * 0.016, // scale by approx dt
+        vel.y + forceY * 0.016
+      ));
+    } else {
+      geminiDangerLevel = 0;
+    }
+  }
+
   // --- Process scheduled destroys ---
   function processDestroys() {
     while (scheduledDestroys.length > 0) {
@@ -263,6 +344,7 @@ export function createCrash(world, gameState, healthBar, W, H) {
 
     updateMovement(dt);
     applySuction();
+    updateGeminiDanger();
     processDestroys();
   }
 
@@ -275,6 +357,8 @@ export function createCrash(world, gameState, healthBar, W, H) {
   return {
     update,
     destroy,
+    getShake,
+    getGeminiDangerLevel() { return geminiDangerLevel; },
     getCenter() { return { x: cx, y: cy }; },
     getEyePosition() {
       const radius = gameState.visualRadius;

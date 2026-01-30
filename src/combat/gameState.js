@@ -13,6 +13,7 @@ export function createGameState(healthBar) {
   let visualRadius = CRASH_INITIAL_RADIUS;
   let elapsed = 0;
   let damageFlash = 0;
+  let defeatReason = null; // 'crash_filled_screen' | 'gemini_consumed'
 
   // Stats tracking
   let objectsCreated = 0;
@@ -59,8 +60,18 @@ export function createGameState(healthBar) {
     // Lose condition: crash fills screen
     if (visualRadius >= CRASH_MAX_RADIUS) {
       state = 'defeat';
+      defeatReason = 'crash_filled_screen';
       return;
     }
+  }
+
+  /**
+   * Trigger defeat with a specific reason (called externally, e.g., Gemini consumed)
+   */
+  function triggerDefeat(reason) {
+    if (state === 'defeat' || state === 'victory') return;
+    state = 'defeat';
+    defeatReason = reason;
   }
 
   function triggerDamageFlash() {
@@ -103,6 +114,7 @@ export function createGameState(healthBar) {
     enterCombat,
     update,
     triggerDamageFlash,
+    triggerDefeat,
     isActive,
     getState,
     trackObjectCreated,
@@ -113,5 +125,6 @@ export function createGameState(healthBar) {
     get elapsed() { return elapsed; },
     get damageFlash() { return damageFlash; },
     get victoryTime() { return victoryTime; },
+    get defeatReason() { return defeatReason; },
   };
 }

@@ -1,4 +1,4 @@
-# CLAUDE.md — Gemini vs Cursor
+# CLAUDE.md — Revenge for Dino
 
 ## Game Concept
 A browser-based physics combat game set inside a Google search page. The player controls a cursor and fights alongside a Gemini AI buddy against an enemy (TBD). Both the player and the Gemini icon can create physics objects by typing prompts into the Google search bar — Gemini generates real Box2D code on the fly. The spawned objects deal damage based on mass, speed, and collisions. This showcases Gemini's code generation abilities and real-time situational awareness.

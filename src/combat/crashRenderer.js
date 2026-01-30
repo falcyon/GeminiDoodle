@@ -48,10 +48,6 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
 
   // Victory animation state
   let victoryStarted = false;
-  let eyeFallY = 0;
-  let eyeFallVy = 0;
-  let eyeRotation = 0;
-  let eyeAlpha = 1; // Eye fades out on victory
 
   // Simple pseudo-random from seed
   function seededRandom() {
@@ -59,13 +55,9 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
     return noiseSeed / 0x7fffffff;
   }
 
-  function initVictoryAnimation(px, py, pr, eyePx, eyePy, eyePr) {
+  function initVictoryAnimation(px, py, pr) {
     if (victoryStarted) return;
     victoryStarted = true;
-
-    eyeFallY = eyePy;
-    eyeFallVy = -5; // Initial upward pop (slower)
-    eyeAlpha = 1;
 
     // Generate explosion particles
     EXPLOSION_PARTICLES.length = 0;
@@ -103,12 +95,6 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
   }
 
   function updateVictoryAnimation(dt) {
-    // Update eye - falls and fades out (no bounce)
-    eyeFallVy += 400 * dt; // slower gravity
-    eyeFallY += eyeFallVy * dt;
-    eyeRotation += 3 * dt;
-    eyeAlpha = Math.max(0, eyeAlpha - dt * 0.4); // Fade out over ~2.5 seconds
-
     // Update explosion particles (fade faster)
     for (const p of EXPLOSION_PARTICLES) {
       p.x += p.vx * dt;
@@ -128,7 +114,7 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
     }
   }
 
-  function drawVictoryAnimation(eyePr) {
+  function drawVictoryAnimation() {
     const dt = 1 / 60;
     updateVictoryAnimation(dt);
 
@@ -164,61 +150,15 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
       ctx.restore();
     }
     ctx.restore();
-
-    // Draw falling eye (fades out)
-    if (eyeAlpha > 0) {
-      const eyeX = canvas.width / 2;
-      ctx.save();
-      ctx.globalAlpha = eyeAlpha;
-      ctx.translate(eyeX, eyeFallY);
-      ctx.rotate(eyeRotation);
-      drawEyeLocal(0, 0, eyePr);
-      ctx.restore();
-    }
-  }
-
-  // Eye drawing without position transform (for victory animation)
-  function drawEyeLocal(ex, ey, er) {
-    // Dimmed/defeated look
-    ctx.globalAlpha = 0.7;
-
-    // Outer glow (dimmer)
-    const glowGrad = ctx.createRadialGradient(ex, ey, er * 0.3, ex, ey, er * 1.5);
-    glowGrad.addColorStop(0, 'rgba(100, 32, 32, 0.3)');
-    glowGrad.addColorStop(1, 'rgba(100, 32, 32, 0)');
-    ctx.beginPath();
-    ctx.arc(ex, ey, er * 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = glowGrad;
-    ctx.fill();
-
-    // Iris — darker, defeated
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    const irisGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, er);
-    irisGrad.addColorStop(0, '#330000');
-    irisGrad.addColorStop(0.5, '#550000');
-    irisGrad.addColorStop(1, '#440000');
-    ctx.fillStyle = irisGrad;
-    ctx.fill();
-
-    // X marks (dead eyes)
-    ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 4;
-    const xSize = er * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(ex - xSize, ey - xSize);
-    ctx.lineTo(ex + xSize, ey + xSize);
-    ctx.moveTo(ex + xSize, ey - xSize);
-    ctx.lineTo(ex - xSize, ey + xSize);
-    ctx.stroke();
-
-    ctx.globalAlpha = 1;
   }
 
   function draw() {
     const state = gameState.getState();
 
-    if (!gameState.isActive() && state !== 'victory' && state !== 'defeat') return;
+    // Don't draw anything on defeat (The Crash is destroyed)
+    if (state === 'defeat') return;
+
+    if (!gameState.isActive() && state !== 'victory') return;
 
     const center = crash.getCenter();
     const eyePos = crash.getEyePosition();
@@ -233,10 +173,10 @@ export function createCrashRenderer(canvas, crash, gameState, world) {
 
     noiseSeed = Math.floor(Date.now() * 7);
 
-    // Victory animation
+    // Victory animation (no eye - just explosion and scattered texts)
     if (state === 'victory') {
-      initVictoryAnimation(px, py, pr, eyePx, eyePy, eyePr);
-      drawVictoryAnimation(eyePr);
+      initVictoryAnimation(px, py, pr);
+      drawVictoryAnimation();
       return;
     }
 

@@ -127,8 +127,8 @@ function animateGeminiSpawn(code) {
   });
 }
 
-// Google landing page elements (all start static, become dynamic on drag)
-const { luckyButton } = createGooglePage(world);
+// Google landing page - returns spawn functions for delayed loading
+const googlePage = createGooglePage(world);
 const searchBar = createSearchBar(world, W * 0.5, H * 0.40, handleSearch);
 
 // --- Gemini icon ---
@@ -142,38 +142,56 @@ const renderer = createRenderer(canvas, getObjects, { jointDots: [] }, inputStat
 
 // --- Intro & Health Bar ---
 const healthBar = createHealthBar(canvas);
-const intro = createIntro(world, canvas, healthBar, geminiIcon, searchBar);
+const intro = createIntro(world, canvas, healthBar, geminiIcon, searchBar, googlePage);
 
 // --- Combat system ---
 const gameState = createGameState(healthBar);
-const crash = createCrash(world, gameState, healthBar, W, H);
+const crash = createCrash(world, gameState, healthBar, W, H, geminiIcon);
 const crashRenderer = createCrashRenderer(canvas, crash, gameState, world);
-const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world);
+const combatHUD = createCombatHUD(canvas, gameState, geminiIcon, intro, searchBar, world, crash);
 
 // Wire up target provider to aim at The Crash's eye
 executor.setTargetProvider(() => crash.getEyePosition());
 
-// --- "I'm Feeling Lucky" button spawns random curated object ---
-let luckyAnimating = false;
-inputState.onClickBody(luckyButton, async () => {
-  if (!intro.isComplete()) return;
-  if (luckyAnimating) return;
-  luckyAnimating = true;
-
-  const keys = Object.keys(CURATED_OBJECTS);
-  const randomKey = keys[Math.floor(Math.random() * keys.length)];
-  const code = CURATED_OBJECTS[randomKey];
-
-  // Spawn below Gemini's current position
-  await animateGeminiSpawn(code);
-  gameState.trackObjectCreated();
-  console.log('[Feeling Lucky]', randomKey);
-
-  luckyAnimating = false;
+// Wire up screen shake from The Crash and intro to the renderer
+renderer.setShakeProvider((dt) => {
+  const crashShake = crash.getShake(dt);
+  const introShake = intro.getShake(dt);
+  return {
+    x: crashShake.x + introShake.x,
+    y: crashShake.y + introShake.y,
+  };
 });
 
+// --- "I'm Feeling Lucky" button spawns random curated object ---
+// (click handler set up after buttons spawn in intro)
+let luckyAnimating = false;
+let luckyClickHandlerSet = false;
+function setupLuckyClickHandler() {
+  if (luckyClickHandlerSet) return;
+  const luckyButton = googlePage.getLuckyButton();
+  if (!luckyButton) return;
+  luckyClickHandlerSet = true;
+
+  inputState.onClickBody(luckyButton, async () => {
+    if (!intro.isComplete()) return;
+    if (luckyAnimating) return;
+    luckyAnimating = true;
+
+    const keys = Object.keys(CURATED_OBJECTS);
+    const randomKey = keys[Math.floor(Math.random() * keys.length)];
+    const code = CURATED_OBJECTS[randomKey];
+
+    // Spawn below Gemini's current position
+    await animateGeminiSpawn(code);
+    gameState.trackObjectCreated();
+    console.log('[Feeling Lucky]', randomKey);
+
+    luckyAnimating = false;
+  });
+}
+
 let combatSpawnScheduled = false;
-let crashDestroyed = false;
 
 // --- Game loop ---
 function loop() {
@@ -181,6 +199,9 @@ function loop() {
 
   // Intro state machine (loading bar, dino, etc.)
   intro.update();
+
+  // Set up lucky button click handler once it's spawned
+  setupLuckyClickHandler();
 
   // Spawn The Crash after intro completes
   if (intro.isComplete() && !combatSpawnScheduled && state === 'idle') {
@@ -208,18 +229,16 @@ function loop() {
   if (gameState.isActive()) {
     gameState.update(1 / 60);
     crash.update(1 / 60);
+    // Update Gemini danger level for visual feedback
+    geminiIcon.setDangerLevel(crash.getGeminiDangerLevel());
+  } else {
+    geminiIcon.setDangerLevel(0);
   }
 
-  // Victory cleanup (once)
-  if (state === 'victory' && !crashDestroyed) {
-    crashDestroyed = true;
-    crash.destroy();
-  }
+  // Game over cleanup handled by combatHUD now
 
-  // Physics step (skip on defeat to freeze everything)
-  if (state !== 'defeat') {
-    world.step(1 / 60, 8, 3);
-  }
+  // Physics step (always run - defeat screen needs physics for falling text)
+  world.step(1 / 60, 8, 3);
 
   cleanupOOB();
   renderer.draw();

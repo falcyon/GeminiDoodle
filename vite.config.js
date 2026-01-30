@@ -1,5 +1,5 @@
 export default {
-  // base: '/geminidoodle/',
+  base: '/dinoRevenge/',
   build: {
     rollupOptions: {
       input: {

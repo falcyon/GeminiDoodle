@@ -51,12 +51,14 @@ export function createGeminiIcon(world, canvas) {
     flourishScale: 0,
     flourishStartTime: 0,
     flourishRotation: 0,
+    // Danger zone visual feedback (0 = safe, 1 = max danger)
+    dangerLevel: 0,
   };
   registerObject(obj);
 
-  // Track mouse position in world coords
+  // Track mouse position in world coords (default to where Gemini appears)
   let mouseWorldX = W / 2;
-  let mouseWorldY = H / 2;
+  let mouseWorldY = H * 0.65 + 12; // offset to account for OFFSET_Y
 
   canvas.addEventListener('mousemove', (e) => {
     mouseWorldX = e.clientX / SCALE;
@@ -91,45 +93,30 @@ export function createGeminiIcon(world, canvas) {
 
     t += 1 / 60;
 
-    // Flourish entrance animation - dramatic spiral zoom
+    // Flourish entrance animation - scale up in place
     if (obj.flourishStartTime > 0) {
       const elapsed = Date.now() - obj.flourishStartTime;
       if (elapsed < FLOURISH_DURATION) {
         const progress = elapsed / FLOURISH_DURATION;
 
-        // Scale: starts tiny, overshoots to 1.3, settles at 1
+        // Scale: starts tiny, overshoots to 1.2, settles at 1
         let scale;
         if (progress < 0.6) {
           // Zoom in with overshoot
           const t = progress / 0.6;
-          scale = t * t * (3 - 2 * t) * 1.3; // smoothstep to 1.3
+          scale = t * t * (3 - 2 * t) * 1.2; // smoothstep to 1.2
         } else {
           // Settle back to 1
           const t = (progress - 0.6) / 0.4;
-          scale = 1.3 - 0.3 * (t * t * (3 - 2 * t)); // smoothstep back to 1
+          scale = 1.2 - 0.2 * (t * t * (3 - 2 * t)); // smoothstep back to 1
         }
         obj.flourishScale = scale;
 
-        // Spiral path from bottom-center up to final position
-        const spiralRadius = (1 - progress) * 15; // shrinks from 15 to 0
-        const spiralAngle = progress * Math.PI * 4; // 2 full rotations
-        const centerX = W / 2;
-        const centerY = H * 0.75;
-
-        // Start from below screen, spiral up
-        const startY = H + 10;
-        const currentY = startY + (centerY - startY) * Math.pow(progress, 0.5);
-
-        const targetX = centerX + Math.cos(spiralAngle) * spiralRadius;
-        const targetY = currentY + Math.sin(spiralAngle) * spiralRadius * 0.5;
-
-        const pos = body.getPosition();
-        const dx = targetX - pos.x;
-        const dy = targetY - pos.y;
-        body.setLinearVelocity(new planck.Vec2(dx * 8, dy * 8));
-
         // Spin the icon during flourish (stored for renderer)
-        obj.flourishRotation = progress * Math.PI * 6; // 3 full spins
+        obj.flourishRotation = progress * Math.PI * 4; // 2 full spins
+
+        // Stay in place - no movement
+        body.setLinearVelocity(new planck.Vec2(0, 0));
 
         return;
       } else {
@@ -191,8 +178,8 @@ export function createGeminiIcon(world, canvas) {
     obj.visible = true;
     obj.flourishStartTime = Date.now();
     obj.flourishScale = 0;
-    // Position at center
-    body.setPosition(new planck.Vec2(W / 2, H / 2));
+    // Position further down
+    body.setPosition(new planck.Vec2(W / 2, H * 0.65));
     body.setLinearVelocity(new planck.Vec2(0, 0));
     // Set speech bubble
     if (speechText) {
@@ -247,6 +234,7 @@ export function createGeminiIcon(world, canvas) {
     obj,
     update,
     setLoading(v) { obj.loading = v; },
+    setDangerLevel(v) { obj.dangerLevel = v; },
     appear,
     setSpeech,
     hideSpeech,

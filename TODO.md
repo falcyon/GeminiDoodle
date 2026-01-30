@@ -46,15 +46,13 @@ Apply shake offset in draw loop:
 - Reduce total intro time (currently ~4.5 seconds to dino spawn)
 - Make bar fill faster
 
-### B. Google page elements pop in like slow-loading page
-- Elements start invisible
-- Pop in one by one with slight delays (logo letters, then search bar, then buttons, etc.)
+### B. Google page elements delayed spawn
+- Elements should load in with a bit of a delay between each other, with elements that belong together sometimes loading together. 
 - Mimics a webpage loading - but something feels "off"
 
 ### C. Add visual glitches during load
 - Subtle screen flicker/corruption
-- Elements might briefly show wrong colors or positions
-- Static/noise overlay that fades
+- Elements briefly glitch and show wrong colors and positions
 - Signals to user: "this isn't normal"
 
 ### D. Interactive Story Tutorial (Gemini Quest)
